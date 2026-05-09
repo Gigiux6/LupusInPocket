@@ -36,6 +36,12 @@ Il gioco vanta un sistema di **Dynamic Theming** basato sullo stato della partit
 - **Image Processing**: Compressione e ridimensionamento lato client per performance ottimali.
 - **State Management**: Gestione reattiva dello stato per riflettere i cambiamenti della partita in tempo reale.
 
+## ⚙️ Setup for Developers
+1. Clone the repo: `git clone https://github.com/Gigiux6/LupusInFabula`
+2. Install dependencies: `flutter pub get`
+3. Configure your `google-services.json` in the android/app folder.
+4. Run `gcloud storage buckets update` for CORS settings to enable web uploads.
+
 ## 📱 Try the App
 Puoi testare **Guess Me** direttamente sul tuo browser o installando l'APK sul tuo dispositivo Android.
 
