@@ -1,0 +1,524 @@
+import 'dart:async';
+import 'dart:math';
+import 'package:flutter/material.dart';
+import '../models/room.dart';
+import '../models/player.dart';
+import '../models/message.dart';
+import '../services/firebase_service.dart';
+import 'package:audioplayers/audioplayers.dart';
+import '../data/translations.dart';
+import 'package:lupus_in_fabula/providers/user_provider.dart';
+
+class GameProvider with ChangeNotifier {
+  final FirebaseService _firebaseService = FirebaseService();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioPlayer _bgmPlayer = AudioPlayer();
+
+  Room? currentRoom;
+  String? currentPlayerId;
+  StreamSubscription<Room?>? _roomSubscription;
+  StreamSubscription<List<Message>>? _messagesSubscription;
+  List<Message> messages = [];
+
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
+
+  String _language = 'it';
+  void setLanguage(String lang) {
+    _language = lang;
+  }
+
+  Timer? _phaseTimer;
+  int _remainingSeconds = 0;
+  int get remainingSeconds => _remainingSeconds;
+
+  void listenToRoom(String roomId) {
+    _roomSubscription?.cancel();
+    _roomSubscription = _firebaseService.getRoomStream(roomId).listen((room) {
+      if (room == null) {
+        if (currentRoom != null) {
+          _roomSubscription?.cancel();
+          _messagesSubscription?.cancel();
+          currentRoom = null;
+          currentPlayerId = null;
+          notifyListeners();
+        }
+      } else {
+        bool phaseChanged = currentRoom?.phase != room.phase;
+        currentRoom = room;
+        if (phaseChanged) {
+          // Restart local timer for everyone
+          _startLocalTimer();
+        }
+        notifyListeners();
+      }
+    });
+
+    _messagesSubscription?.cancel();
+    _messagesSubscription = _firebaseService.getMessagesStream(roomId).listen((msgs) {
+      messages = msgs;
+      notifyListeners();
+    });
+  }
+
+  void _startLocalTimer() {
+    _phaseTimer?.cancel();
+    if (currentRoom?.phaseEndTime == null) return;
+
+    _phaseTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final diff = (currentRoom!.phaseEndTime! - now) ~/ 1000;
+      
+      if (diff <= 0) {
+        _remainingSeconds = 0;
+        timer.cancel();
+        if (isHost) {
+          _onPhaseEnd();
+        }
+      } else {
+        _remainingSeconds = diff;
+      }
+      notifyListeners();
+    });
+  }
+
+  Future<void> _onPhaseEnd() async {
+    if (currentRoom == null) return;
+
+    if (currentRoom!.phase == GamePhase.notte) {
+      // Process Night Actions
+      await _processNightResults();
+    } else if (currentRoom!.phase == GamePhase.discussione) {
+      // Move to Voting
+      await startPhase(GamePhase.votazione);
+    } else if (currentRoom!.phase == GamePhase.votazione) {
+      // Process Day Voting
+      await _processDayResults();
+    }
+  }
+
+  Future<void> _processNightResults() async {
+    if (!isHost || currentRoom == null) return;
+
+    // 1. Calculate Wolf Majority Vote
+    Map<String, int> wolfVotes = {};
+    currentRoom!.players.forEach((id, player) {
+      if (player.role == PlayerRole.lupo && player.isAlive && player.votedFor != null) {
+        wolfVotes[player.votedFor!] = (wolfVotes[player.votedFor!] ?? 0) + 1;
+      }
+    });
+
+    String? victimId;
+    if (wolfVotes.isNotEmpty) {
+      int maxVotes = -1;
+      bool tie = false;
+      wolfVotes.forEach((id, count) {
+        if (count > maxVotes) {
+          maxVotes = count;
+          victimId = id;
+          tie = false;
+        } else if (count == maxVotes) {
+          tie = true;
+        }
+      });
+      if (tie) victimId = null; // Tie means no majority, no kill
+    }
+
+    // 2. Check Doctor Protection
+    if (victimId != null && victimId == currentRoom!.medicProtectId) {
+      victimId = null; // Saved by the Doctor
+    }
+
+    // 3. Criceto Mannaro Logic
+    if (victimId != null) {
+      final victim = currentRoom!.players[victimId];
+      if (victim?.role == PlayerRole.criceto_mannaro) {
+        // Doesn't die, becomes wolf
+        await _firebaseService.assignRoles(currentRoom!.id, {victimId!: PlayerRole.lupo});
+        victimId = null;
+        await sendSystemMessage(AppTranslations.translate('msg_criceto_attacked', _language));
+      }
+    }
+
+    // 4. Witch Resurrection Logic
+    if (currentRoom!.witchActionTargetId != null) {
+      final witch = currentRoom!.players.values.firstWhere((p) => p.role == PlayerRole.strega && p.isAlive, orElse: () => currentRoom!.players.values.first);
+      if (witch.role == PlayerRole.strega && !witch.hasUsedPotion) {
+        final target = currentRoom!.players[currentRoom!.witchActionTargetId];
+        if (target != null && !target.isAlive) {
+           // Resurrect
+           await _firebaseService.resurrectPlayer(currentRoom!.id, target.id);
+           await _firebaseService.updatePlayerLastAction(currentRoom!.id, witch.id, null, hasUsedPotion: true);
+           await sendSystemMessage(AppTranslations.translate('msg_resurrected', _language, args: {'name': target.name}));
+        }
+      }
+    }
+
+    // 5. Update Doctor's Last Action Target
+    final actualMedic = currentRoom!.players.values.where((p) => p.role == PlayerRole.medico && p.isAlive).firstOrNull;
+    if (actualMedic != null) {
+      await _firebaseService.updatePlayerLastAction(currentRoom!.id, actualMedic.id, currentRoom!.medicProtectId);
+    }
+
+    // 6. Handle Results and Chat
+    if (victimId != null) {
+      final victim = currentRoom!.players[victimId];
+      await _firebaseService.killPlayer(currentRoom!.id, victimId!);
+      await sendSystemMessage(AppTranslations.translate('msg_sbranato', _language, args: {'name': victim?.name ?? 'Qualcuno'}));
+    } else {
+      await sendSystemMessage(AppTranslations.translate('msg_no_deaths', _language));
+    }
+
+    // 7. Medium Notification
+    final actualMedium = currentRoom!.players.values.where((p) => p.role == PlayerRole.medium && p.isAlive).firstOrNull;
+    if (actualMedium != null && currentRoom!.lastKilledId != null) {
+      final dead = currentRoom!.players[currentRoom!.lastKilledId];
+      if (dead != null) {
+        String resultText = dead.role == PlayerRole.lupo ? AppTranslations.translate('msg_medium_was', _language) : AppTranslations.translate('msg_medium_was_not', _language);
+        await sendSystemMessage(AppTranslations.translate('msg_medium_reveals', _language, args: {'result': resultText}));
+      }
+    }
+
+    await checkWinConditions();
+    if (currentRoom!.status != RoomStatus.finished) {
+      await startPhase(GamePhase.discussione);
+    }
+  }
+
+  @override
+  void dispose() {
+    _roomSubscription?.cancel();
+    _messagesSubscription?.cancel();
+    _phaseTimer?.cancel();
+    _audioPlayer.dispose();
+    _bgmPlayer.dispose();
+    super.dispose();
+  }
+
+  void playLobbyMusic(double volume) async {
+    if (_bgmPlayer.state == PlayerState.playing) {
+      await _bgmPlayer.setVolume(volume * 0.5);
+      return;
+    }
+    try {
+      await _bgmPlayer.setReleaseMode(ReleaseMode.loop);
+      await _bgmPlayer.play(AssetSource('audio/lobby_music.mp3'), volume: volume * 0.5);
+    } catch (e) {
+      debugPrint('Error playing lobby music: $e');
+    }
+  }
+
+  Future<void> playWhoosh(double volume) async {
+    try {
+      await _audioPlayer.play(AssetSource('audio/whoosh.mp3'), volume: volume);
+    } catch (e) {
+      debugPrint('Error playing whoosh sound: $e');
+    }
+  }
+
+  void stopLobbyMusic() async {
+    await _bgmPlayer.stop();
+  }
+
+  Future<void> createRoom(String playerName, String uid, {String? avatarUrl}) async {
+    _setLoading(true);
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    Random rnd = Random();
+    String roomId = String.fromCharCodes(Iterable.generate(6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))));
+    
+    currentPlayerId = uid;
+    Player host = Player(id: uid, name: playerName, avatarUrl: avatarUrl);
+    
+    Room room = Room(
+      id: roomId,
+      hostId: uid,
+      status: RoomStatus.lobby,
+      turnOrder: [uid],
+      players: {uid: host},
+    );
+
+    await _firebaseService.createRoom(room);
+    listenToRoom(roomId);
+    _setLoading(false);
+  }
+
+  Future<void> saveRoomId(String? roomId, UserProvider userProvider) async {
+    await userProvider.setLastRoomId(roomId);
+  }
+
+  Future<bool> joinRoom(String roomId, String playerName, String uid, {String? avatarUrl}) async {
+    _setLoading(true);
+    currentPlayerId = uid;
+    Player player = Player(id: uid, name: playerName, avatarUrl: avatarUrl);
+    bool success = await _firebaseService.joinRoom(roomId, player);
+    
+    if (!success) {
+      _setLoading(false);
+      currentPlayerId = null;
+      return false;
+    }
+    
+    listenToRoom(roomId);
+    _setLoading(false);
+    return true;
+  }
+
+  Future<void> startGame() async {
+    if (currentRoom == null) return;
+    int totalPlayers = currentRoom!.players.length;
+    int totalRoles = currentRoom!.selectedRoles.values.fold(0, (sum, count) => sum + count);
+    
+    if (totalPlayers != totalRoles) return;
+    
+    _setLoading(true);
+    stopLobbyMusic();
+
+    List<String> playerIds = currentRoom!.players.keys.toList();
+    playerIds.shuffle();
+
+    Map<String, PlayerRole> roles = {};
+    int currentIndex = 0;
+    
+    currentRoom!.selectedRoles.forEach((role, count) {
+      for (int i = 0; i < count; i++) {
+        if (currentIndex < playerIds.length) {
+          roles[playerIds[currentIndex]] = role;
+          currentIndex++;
+        }
+      }
+    });
+
+    await _firebaseService.assignRoles(currentRoom!.id, roles);
+    await _firebaseService.updateRoomStatus(currentRoom!.id, RoomStatus.playing);
+    
+    await startPhase(GamePhase.notte);
+    
+    _setLoading(false);
+  }
+
+  Future<void> updateRoleCount(PlayerRole role, int count) async {
+    if (currentRoom == null || !isHost) return;
+    if (count < 0) return;
+    
+    if (role == PlayerRole.massoni) {
+      count = count > 0 ? 2 : 0;
+    }
+
+    if (role == PlayerRole.medico && count < 1) return;
+    if (role == PlayerRole.veggente && count < 1) return;
+    if (role == PlayerRole.lupo && count < 1) return;
+    
+    if (role != PlayerRole.lupo && role != PlayerRole.contadino && role != PlayerRole.massoni && count > 1) return;
+
+    final newRoles = Map<PlayerRole, int>.from(currentRoom!.selectedRoles);
+    if (count == 0 && role != PlayerRole.lupo && role != PlayerRole.contadino) {
+      newRoles.remove(role);
+    } else {
+      newRoles[role] = count;
+    }
+    
+    await _firebaseService.updateSelectedRoles(currentRoom!.id, newRoles);
+  }
+
+  Future<void> startPhase(GamePhase phase) async {
+    if (currentRoom == null) return;
+    
+    int duration = 30;
+    if (phase == GamePhase.discussione) {
+      duration = currentRoom!.discussionDuration;
+    } else if (phase == GamePhase.votazione) {
+      duration = currentRoom!.voteDuration;
+    } else if (phase == GamePhase.notte) {
+      duration = 30;
+    }
+    
+    int endTime = DateTime.now().millisecondsSinceEpoch + (duration * 1000);
+    
+    await _firebaseService.updatePhase(currentRoom!.id, phase, endTime: endTime);
+    await _firebaseService.resetVotes(currentRoom!.id);
+
+    if (phase == GamePhase.notte) {
+      await sendSystemMessage(AppTranslations.translate('msg_night_fall', _language));
+    } else if (phase == GamePhase.discussione) {
+      await sendSystemMessage(AppTranslations.translate('msg_day_break', _language));
+    } else if (phase == GamePhase.votazione) {
+      await sendSystemMessage(AppTranslations.translate('msg_vote_start', _language));
+    }
+  }
+
+  Future<void> sendSystemMessage(String text) async {
+    if (currentRoom == null) return;
+    await _firebaseService.sendMessage(currentRoom!.id, Message(
+      id: '',
+      senderId: 'system',
+      senderName: 'Game Master',
+      text: text,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+    ));
+  }
+
+  Future<void> sendMessage(String text, {bool isWolfOnly = false, bool isMassoniOnly = false}) async {
+    if (currentRoom == null || currentPlayerId == null) return;
+    final player = currentRoom!.players[currentPlayerId];
+    if (player == null || !player.isAlive) return;
+
+    await _firebaseService.sendMessage(currentRoom!.id, Message(
+      id: '',
+      senderId: currentPlayerId!,
+      senderName: player.name,
+      text: text,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      isWolfOnly: isWolfOnly,
+      isMassoniOnly: isMassoniOnly,
+    ));
+  }
+
+  Future<void> vote(String? targetId) async {
+    if (currentRoom == null || currentPlayerId == null) return;
+    final player = currentRoom!.players[currentPlayerId];
+    if (player == null || !player.isAlive) return;
+
+    if (currentRoom!.phase == GamePhase.votazione) {
+      await _firebaseService.castVote(currentRoom!.id, currentPlayerId!, targetId);
+    } else if (currentRoom!.phase == GamePhase.notte) {
+      if (player.role == PlayerRole.lupo) {
+        await _firebaseService.setWerewolfVote(currentRoom!.id, currentPlayerId!, targetId);
+      } else if (player.role == PlayerRole.medico) {
+        if (targetId == null) return;
+        if (targetId == player.lastActionTargetId) {
+          return;
+        }
+        await _firebaseService.setMedicProtect(currentRoom!.id, targetId);
+      } else if (player.role == PlayerRole.veggente) {
+        if (targetId == null) return;
+        await _firebaseService.setSeerCheck(currentRoom!.id, targetId);
+      } else if (player.role == PlayerRole.strega) {
+        if (targetId == null || player.hasUsedPotion) return;
+        await _firebaseService.setWitchAction(currentRoom!.id, targetId);
+      }
+    }
+  }
+
+  Future<void> checkWinConditions() async {
+    if (currentRoom == null) return;
+    
+    if (currentRoom!.lastKilledId != null && currentRoom!.phase == GamePhase.discussione) {
+      final lastKilled = currentRoom!.players[currentRoom!.lastKilledId];
+      if (lastKilled?.role == PlayerRole.jolly) {
+         await _firebaseService.setWinnerTeam(currentRoom!.id, 'jolly');
+         await sendSystemMessage(AppTranslations.translate('msg_jolly_win', _language));
+         return;
+      }
+    }
+    
+    int lupi = currentRoom!.players.values.where((p) => p.isAlive && p.role == PlayerRole.lupo).length;
+    int buoni = currentRoom!.players.values.where((p) => p.isAlive && p.role != PlayerRole.lupo && p.role != PlayerRole.jolly).length;
+
+    if (lupi == 0) {
+      await _firebaseService.setWinnerTeam(currentRoom!.id, 'buoni');
+      await sendSystemMessage(AppTranslations.translate('msg_buoni_win', _language));
+    } else if (lupi >= buoni) {
+      await _firebaseService.setWinnerTeam(currentRoom!.id, 'lupi');
+      await sendSystemMessage(AppTranslations.translate('msg_lupi_win', _language));
+    }
+  }
+
+  bool get isHost => currentRoom?.hostId == currentPlayerId;
+  Player? get me => currentRoom?.players[currentPlayerId];
+
+  void pauseLobbyMusic() async {
+    if (_bgmPlayer.state == PlayerState.playing) {
+      await _bgmPlayer.pause();
+    }
+  }
+
+  void resumeLobbyMusic() async {
+    if (_bgmPlayer.state == PlayerState.paused) {
+      await _bgmPlayer.resume();
+    }
+  }
+
+  void _setLoading(bool value) {
+    _isLoading = value;
+    notifyListeners();
+  }
+
+  Future<void> updateRoomDurations(int discussion, int vote) async {
+    if (currentRoom == null || !isHost) return;
+    await _firebaseService.updateRoomDurations(currentRoom!.id, discussion, vote);
+  }
+
+  Future<void> returnToLobby() async {
+    if (currentRoom == null) return;
+    await _firebaseService.resetRoomForNewGame(currentRoom!.id);
+  }
+
+  Future<void> leaveRoom({String? name}) async {
+    if (currentRoom == null || currentPlayerId == null) return;
+    String roomId = currentRoom!.id;
+    if (isHost) {
+      await _firebaseService.deleteRoom(roomId);
+    } else {
+      if (name != null) {
+        final text = AppTranslations.translate('player_left', _language, args: {'name': name});
+        await sendSystemMessage(text);
+        await _firebaseService.updateLastSystemMessage(roomId, text);
+      }
+      await _firebaseService.removePlayer(roomId, currentPlayerId!);
+    }
+    _roomSubscription?.cancel();
+    _messagesSubscription?.cancel();
+    currentRoom = null;
+    currentPlayerId = null;
+    notifyListeners();
+  }
+
+  Future<void> _processDayResults() async {
+    if (!isHost || currentRoom == null) return;
+
+    Map<String, int> voteCounts = {};
+    int abstainCount = 0;
+    currentRoom!.players.forEach((id, player) {
+      if (player.votedFor == 'abstain') {
+        abstainCount++;
+      } else if (player.votedFor != null) {
+        voteCounts[player.votedFor!] = (voteCounts[player.votedFor!] ?? 0) + 1;
+      }
+    });
+
+    if (voteCounts.isEmpty) {
+        await sendSystemMessage(AppTranslations.translate('msg_village_abstain', _language));
+    } else {
+      int maxVotes = 0;
+      voteCounts.forEach((id, count) {
+        if (count > maxVotes) maxVotes = count;
+      });
+
+      List<String> topVotedIds = [];
+      voteCounts.forEach((id, count) {
+        if (count == maxVotes) topVotedIds.add(id);
+      });
+
+      if (abstainCount > maxVotes || (maxVotes == 0 && abstainCount == 0)) {
+        await sendSystemMessage(AppTranslations.translate('msg_village_abstain', _language));
+      } else if (topVotedIds.length > 1) {
+        await sendSystemMessage(AppTranslations.translate('msg_tie', _language));
+      } else if (topVotedIds.length == 1) {
+        String victimId = topVotedIds.first;
+        final victim = currentRoom!.players[victimId];
+        await _firebaseService.killPlayer(currentRoom!.id, victimId);
+        await sendSystemMessage(AppTranslations.translate('msg_voted_out', _language, args: {'name': victim?.name ?? 'Qualcuno'}));
+      } else {
+        await sendSystemMessage(AppTranslations.translate('msg_no_agreement', _language));
+      }
+    }
+
+    await checkWinConditions();
+    if (currentRoom!.status != RoomStatus.finished) {
+      await startPhase(GamePhase.notte);
+    }
+  }
+
+  // This will be more complete once I have the 'werewolfVote' in the room data
+  // but for now I'll use a placeholder logic
+}
