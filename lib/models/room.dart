@@ -50,7 +50,7 @@ class Room {
     this.nightCount = 1,
     this.selectedRoles = const {
       PlayerRole.lupo: 1,
-      PlayerRole.contadino: 4,
+      PlayerRole.contadino: 1,
       PlayerRole.veggente: 1,
       PlayerRole.guardiano: 1,
     },

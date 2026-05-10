@@ -32,49 +32,51 @@ class DefaultFirebaseOptions {
   // dalla tua Firebase Console -> Impostazioni Progetto -> Generali
   
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBjry_qqw3N2eKOpmbroMtsj5I2iU5g8a4',
-    appId: '1:468446089858:web:0815544662d18b12201a9b',
-    messagingSenderId: '468446089858',
-    projectId: 'guess-me-bfd58',
-    authDomain: 'guess-me-bfd58.firebaseapp.com',
-    databaseURL: 'https://guess-me-bfd58-default-rtdb.europe-west1.firebasedatabase.app',
-    storageBucket: 'guess-me-bfd58.firebasestorage.app',
-    measurementId: 'G-DUMMY',
+    apiKey: 'AIzaSyBwNowDmuA8NZ791POXpD_Y5e9kKK4iWFk',
+    appId: '1:248731957793:web:7a817448e89f899e53c160', // Note: This should ideally be verified from console for web
+    messagingSenderId: '248731957793',
+    projectId: 'lupus-in-pocket',
+    authDomain: 'lupus-in-pocket.firebaseapp.com',
+    databaseURL: 'https://lupus-in-pocket-default-rtdb.europe-west1.firebasedatabase.app',
+    storageBucket: 'lupus-in-pocket.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBjry_qqw3N2eKOpmbroMtsj5I2iU5g8a4',
-    appId: '1:1234567890:android:dummy1234',
-    messagingSenderId: '468446089858',
-    projectId: 'guess-me-bfd58',
-    databaseURL: 'https://guess-me-bfd58-default-rtdb.europe-west1.firebasedatabase.app',
+    apiKey: 'AIzaSyBwNowDmuA8NZ791POXpD_Y5e9kKK4iWFk',
+    appId: '1:248731957793:android:b6ef4d39af1683a053c160',
+    messagingSenderId: '248731957793',
+    projectId: 'lupus-in-pocket',
+    databaseURL: 'https://lupus-in-pocket-default-rtdb.europe-west1.firebasedatabase.app',
+    storageBucket: 'lupus-in-pocket.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBjry_qqw3N2eKOpmbroMtsj5I2iU5g8a4',
-    appId: '1:1234567890:ios:dummy1234',
-    messagingSenderId: '468446089858',
-    projectId: 'guess-me-bfd58',
-    databaseURL: 'https://guess-me-bfd58-default-rtdb.europe-west1.firebasedatabase.app',
-    iosBundleId: 'com.antigravity.guess_me',
+    apiKey: 'AIzaSyBwNowDmuA8NZ791POXpD_Y5e9kKK4iWFk',
+    appId: '1:248731957793:ios:6677f4e8b89e899e53c160', // Generic placeholder, needs manual check
+    messagingSenderId: '248731957793',
+    projectId: 'lupus-in-pocket',
+    databaseURL: 'https://lupus-in-pocket-default-rtdb.europe-west1.firebasedatabase.app',
+    storageBucket: 'lupus-in-pocket.firebasestorage.app',
+    iosBundleId: 'com.gigiux.lupus_in_pocket',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyBjry_qqw3N2eKOpmbroMtsj5I2iU5g8a4',
-    appId: '1:1234567890:ios:dummy1234',
-    messagingSenderId: '468446089858',
-    projectId: 'guess-me-bfd58',
-    databaseURL: 'https://guess-me-bfd58-default-rtdb.europe-west1.firebasedatabase.app',
-    iosBundleId: 'com.antigravity.guess_me',
+    apiKey: 'AIzaSyBwNowDmuA8NZ791POXpD_Y5e9kKK4iWFk',
+    appId: '1:248731957793:ios:6677f4e8b89e899e53c160',
+    messagingSenderId: '248731957793',
+    projectId: 'lupus-in-pocket',
+    databaseURL: 'https://lupus-in-pocket-default-rtdb.europe-west1.firebasedatabase.app',
+    storageBucket: 'lupus-in-pocket.firebasestorage.app',
+    iosBundleId: 'com.gigiux.lupus_in_pocket',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyBjry_qqw3N2eKOpmbroMtsj5I2iU5g8a4',
-    appId: '1:468446089858:web:0815544662d18b12201a9b',
-    messagingSenderId: '468446089858',
-    projectId: 'guess-me-bfd58',
-    authDomain: 'guess-me-bfd58.firebaseapp.com',
-    databaseURL: 'https://guess-me-bfd58-default-rtdb.europe-west1.firebasedatabase.app',
-    measurementId: 'G-DUMMY',
+    apiKey: 'AIzaSyBwNowDmuA8NZ791POXpD_Y5e9kKK4iWFk',
+    appId: '1:248731957793:web:7a817448e89f899e53c160',
+    messagingSenderId: '248731957793',
+    projectId: 'lupus-in-pocket',
+    authDomain: 'lupus-in-pocket.firebaseapp.com',
+    databaseURL: 'https://lupus-in-pocket-default-rtdb.europe-west1.firebasedatabase.app',
+    storageBucket: 'lupus-in-pocket.firebasestorage.app',
   );
 }

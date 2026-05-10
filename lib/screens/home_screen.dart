@@ -51,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       if (mounted) {
         await context.read<GameProvider>().saveRoomId(context.read<GameProvider>().currentRoom?.id, userProvider);
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const LobbyScreen()));
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LobbyScreen()));
       }
     } catch (e) {
       if (mounted) {
@@ -95,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
     
     if (success) {
       await context.read<GameProvider>().saveRoomId(roomId, userProvider);
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const LobbyScreen()));
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LobbyScreen()));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -129,145 +129,134 @@ class _HomeScreenState extends State<HomeScreen> {
     final userProvider = context.watch<UserProvider>();
     final user = userProvider.user;
 
-    return GestureDetector(
-      onTap: () {
-        // Resume/Play music on first interaction for browser compatibility
-        final volume = context.read<UserProvider>().musicVolume;
-        context.read<GameProvider>().playLobbyMusic(volume);
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.info_outline, size: 28),
-            onPressed: _showInstructions,
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.settings, size: 32),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              ),
-            ),
-            const SizedBox(width: 10),
-          ],
+    // Rimosso GestureDetector globale per evitare conflitti audio su Android
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.info_outline, size: 28),
+          onPressed: _showInstructions,
         ),
-        body: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    'assets/images/logo.png',
-                    height: 180,
-                    fit: BoxFit.contain,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings, size: 32),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 40),
+                Text(
+                  userProvider.t('app_title'),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.displayLarge,
+                ),
+                const SizedBox(height: 40),
+                if (user != null) ...[
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                    ),
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.black, width: 3),
+                        borderRadius: BorderRadius.circular(50),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(50),
+                        child: Image.network(user.avatarUrl),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    userProvider.t('welcome', args: {'name': user.name}),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                if (userProvider.lastRoomId != null && !isLoading) ...[
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: CustomButton(
+                      text: userProvider.t('rejoin_room'),
+                      color: Colors.orangeAccent,
+                      onPressed: () {
+                        _roomController.text = userProvider.lastRoomId!;
+                        _joinRoom();
+                      },
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 40),
+                if (isLoading)
+                  const CircularProgressIndicator()
+                else ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: CustomButton(
+                      text: userProvider.t('create_room'),
+                      onPressed: _createRoom,
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  const Divider(color: Colors.white54),
+                  const SizedBox(height: 40),
+                  TextField(
+                    controller: _roomController,
+                    decoration: InputDecoration(
+                      labelText: userProvider.t('room_code'),
+                      prefixIcon: const Icon(Icons.meeting_room),
+                    ),
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    userProvider.t('app_title'),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.displayLarge,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CustomButton(
+                          text: userProvider.t('join_room'),
+                          onPressed: _joinRoom,
+                          isSecondary: true,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: CustomButton(
+                          text: userProvider.t('qr_scan'),
+                          onPressed: () async {
+                            final scannedCode = await Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const QRScannerScreen()),
+                            );
+                            if (scannedCode != null && scannedCode is String) {
+                              _roomController.text = scannedCode;
+                              _joinRoom();
+                            }
+                          },
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 40),
-                  if (user != null) ...[
-                    GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const EditProfileScreen()),
-                      ),
-                      child: Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.black, width: 3),
-                          borderRadius: BorderRadius.circular(50),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(50),
-                          child: Image.network(user.avatarUrl),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      userProvider.t('welcome', args: {'name': user.name}),
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (userProvider.lastRoomId != null && !isLoading) ...[
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: CustomButton(
-                        text: userProvider.t('rejoin_room'),
-                        color: Colors.orangeAccent,
-                        onPressed: () {
-                          _roomController.text = userProvider.lastRoomId!;
-                          _joinRoom();
-                        },
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 40),
-                  if (isLoading)
-                    const CircularProgressIndicator()
-                  else ...[
-                    SizedBox(
-                      width: double.infinity,
-                      child: CustomButton(
-                        text: userProvider.t('create_room'),
-                        onPressed: _createRoom,
-                      ),
-                    ),
-                    const SizedBox(height: 40),
-                    const Divider(color: Colors.white54),
-                    const SizedBox(height: 40),
-                    TextField(
-                      controller: _roomController,
-                      decoration: InputDecoration(
-                        labelText: userProvider.t('room_code'),
-                        prefixIcon: const Icon(Icons.meeting_room),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: CustomButton(
-                            text: userProvider.t('join_room'),
-                            onPressed: _joinRoom,
-                            isSecondary: true,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: CustomButton(
-                            text: userProvider.t('qr_scan'),
-                            onPressed: () async {
-                              final scannedCode = await Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const QRScannerScreen()),
-                              );
-                              if (scannedCode != null && scannedCode is String) {
-                                _roomController.text = scannedCode;
-                                _joinRoom();
-                              }
-                            },
-                            color: Theme.of(context).primaryColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ],
-              ),
+              ],
             ),
           ),
         ),

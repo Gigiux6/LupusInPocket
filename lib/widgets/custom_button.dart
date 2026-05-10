@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../providers/game_provider.dart';
 import '../providers/user_provider.dart';
+import '../models/room.dart';
 
 class CustomButton extends StatefulWidget {
   final String text;
@@ -11,6 +12,7 @@ class CustomButton extends StatefulWidget {
   final Color? color;
   final bool isSecondary;
   final List<BoxShadow>? shadows;
+  final bool playSound;
 
   const CustomButton({
     super.key,
@@ -19,6 +21,7 @@ class CustomButton extends StatefulWidget {
     this.color,
     this.isSecondary = false,
     this.shadows,
+    this.playSound = false,
   });
 
   @override
@@ -39,8 +42,14 @@ class _CustomButtonState extends State<CustomButton> {
       onTapDown: (_) {
         if (widget.onPressed != null) {
           setState(() => _isPressed = true);
-          final effectsVolume = context.read<UserProvider>().effectsVolume;
-          context.read<GameProvider>().playWhoosh(effectsVolume);
+          if (widget.playSound) {
+            final gameProvider = context.read<GameProvider>();
+            // Disabilita il suono se siamo di notte per non rivelare i movimenti
+            if (gameProvider.currentRoom?.phase != GamePhase.notte) {
+              final effectsVolume = context.read<UserProvider>().effectsVolume;
+              gameProvider.playWhoosh(effectsVolume);
+            }
+          }
         }
       },
       onTapUp: (_) {

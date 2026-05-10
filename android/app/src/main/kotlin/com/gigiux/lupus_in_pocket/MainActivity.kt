@@ -1,4 +1,4 @@
-package com.example.forehead_names
+package com.gigiux.lupus_in_pocket
 
 import io.flutter.embedding.android.FlutterActivity
 

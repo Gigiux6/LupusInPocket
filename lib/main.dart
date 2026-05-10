@@ -65,35 +65,26 @@ class _LupusAppState extends State<LupusApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final userProvider = context.watch<UserProvider>();
     
+    Widget home;
     if (!userProvider.isInitialized) {
-      return MaterialApp(
-        title: 'Lupus in Pocket',
-        theme: AppTheme.getTheme(),
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: AppTheme.dayBg,
-          body: const Center(
-            child: CircularProgressIndicator(color: AppTheme.leatherBrown),
-          ),
+      home = Scaffold(
+        backgroundColor: AppTheme.dayBg,
+        body: const Center(
+          child: CircularProgressIndicator(color: AppTheme.leatherBrown),
         ),
       );
-    }
-
-    // Se l'inizializzazione è finita ma non c'è un utente (primo accesso), vai al setup
-    if (userProvider.user == null) {
-      return MaterialApp(
-        title: 'Lupus in Pocket',
-        theme: AppTheme.getTheme(),
-        debugShowCheckedModeBanner: false,
-        home: const ProfileSetupScreen(),
-      );
+    } else if (userProvider.user == null) {
+      home = const ProfileSetupScreen();
+    } else {
+      home = const HomeScreen();
     }
 
     return MaterialApp(
+      key: const ValueKey('AppRoot'),
       title: 'Lupus in Pocket',
       theme: AppTheme.getTheme(),
       debugShowCheckedModeBanner: false,
-      home: const HomeScreen(),
+      home: home,
     );
   }
 }

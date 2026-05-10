@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
+import '../providers/game_provider.dart';
 import '../widgets/custom_button.dart';
 import '../theme/app_theme.dart';
 
@@ -34,6 +35,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final user = context.read<UserProvider>().user;
     _nameController = TextEditingController(text: user?.name ?? '');
     _selectedAvatar = user?.avatarUrl;
+
+    // Forza la musica a riprendere se Android l'ha messa in pausa durante la transizione
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final userProvider = context.read<UserProvider>();
+      context.read<GameProvider>().playLobbyMusic(userProvider.musicVolume);
+    });
   }
 
   @override
