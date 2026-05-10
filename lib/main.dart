@@ -67,7 +67,7 @@ class _LupusAppState extends State<LupusApp> with WidgetsBindingObserver {
     
     if (!userProvider.isInitialized) {
       return MaterialApp(
-        title: 'Lupus in Fabula',
+        title: 'Lupus in Pocket',
         theme: AppTheme.getTheme(),
         debugShowCheckedModeBanner: false,
         home: Scaffold(
@@ -82,7 +82,7 @@ class _LupusAppState extends State<LupusApp> with WidgetsBindingObserver {
     // Se l'inizializzazione è finita ma non c'è un utente (primo accesso), vai al setup
     if (userProvider.user == null) {
       return MaterialApp(
-        title: 'Lupus in Fabula',
+        title: 'Lupus in Pocket',
         theme: AppTheme.getTheme(),
         debugShowCheckedModeBanner: false,
         home: const ProfileSetupScreen(),
@@ -90,7 +90,7 @@ class _LupusAppState extends State<LupusApp> with WidgetsBindingObserver {
     }
 
     return MaterialApp(
-      title: 'Lupus in Fabula',
+      title: 'Lupus in Pocket',
       theme: AppTheme.getTheme(),
       debugShowCheckedModeBanner: false,
       home: const HomeScreen(),

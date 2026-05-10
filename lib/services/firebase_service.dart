@@ -92,9 +92,9 @@ class FirebaseService {
     await _db.child('rooms/$roomId/players/$voterId/votedFor').set(targetId);
   }
 
-  Future<void> setMedicProtect(String roomId, String medicId, String targetId) async {
-    await _db.child('rooms/$roomId/medicProtectId').set(targetId);
-    await _db.child('rooms/$roomId/players/$medicId/votedFor').set(targetId);
+  Future<void> setGuardianProtect(String roomId, String guardianId, String targetId) async {
+    await _db.child('rooms/$roomId/guardianProtectId').set(targetId);
+    await _db.child('rooms/$roomId/players/$guardianId/votedFor').set(targetId);
   }
 
   Future<void> setSeerCheck(String roomId, String seerId, String targetId) async {
@@ -130,6 +130,15 @@ class FirebaseService {
     await _db.child('rooms/$roomId/players/$mediumId/votedFor').set(targetId);
   }
 
+  Future<void> setMitomaneAction(String roomId, String mitomaneId, String targetId) async {
+    await _db.child('rooms/$roomId/mitomaneActionTargetId').set(targetId);
+    await _db.child('rooms/$roomId/players/$mitomaneId/votedFor').set(targetId);
+  }
+
+  Future<void> updateNightCount(String roomId, int count) async {
+    await _db.child('rooms/$roomId/nightCount').set(count);
+  }
+
   Future<void> resetVotes(String roomId) async {
     final snapshot = await _db.child('rooms/$roomId/players').get();
     if (snapshot.value != null) {
@@ -139,11 +148,13 @@ class FirebaseService {
         updates['players/$key/votedFor'] = null;
       });
       updates['werewolfVote'] = null;
-      updates['medicProtectId'] = null;
+      updates['medicProtectId'] = null; // Clean up old field if it exists
+      updates['guardianProtectId'] = null;
       updates['seerCheckId'] = null;
       updates['witchActionTargetId'] = null;
       updates['hunterActionTargetId'] = null;
       updates['mediumCheckId'] = null;
+      updates['mitomaneActionTargetId'] = null;
       await _db.child('rooms/$roomId').update(updates);
     }
   }
@@ -160,6 +171,8 @@ class FirebaseService {
         updates['players/$key/votedFor'] = null;
         updates['players/$key/inLobby'] = false;
         updates['players/$key/hasUsedBullet'] = false;
+        updates['players/$key/hasUsedPotion'] = false;
+        updates['players/$key/lastActionTargetId'] = null;
       });
       
       updates['status'] = RoomStatus.lobby.name;
@@ -169,11 +182,14 @@ class FirebaseService {
       updates['winnerTeam'] = null;
       updates['messages'] = null;
       updates['werewolfVote'] = null;
-      updates['medicProtectId'] = null;
+      updates['medicProtectId'] = null; // Clean up old field if it exists
+      updates['guardianProtectId'] = null;
       updates['seerCheckId'] = null;
       updates['witchActionTargetId'] = null;
       updates['hunterActionTargetId'] = null;
       updates['mediumCheckId'] = null;
+      updates['mitomaneActionTargetId'] = null;
+      updates['nightCount'] = 1;
       
       await _db.child('rooms/$roomId').update(updates);
     }

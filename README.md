@@ -1,4 +1,4 @@
-## 🐺 Guess the Lupus: Lupus in Fabula - Digital Party Game
+## 🐺 Guess the Lupus: Lupus in Pocket - Digital Party Game
 
 ![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?style=for-the-badge&logo=flutter)
 ![Firebase](https://img.shields.io/badge/Firebase-Auth%20%7C%20Storage%20%7C%20DB-orange?style=for-the-badge&logo=firebase)
@@ -9,12 +9,12 @@
 </p>
 
 ## 📝 Description
-**Lupus in Fabula** è un'applicazione multiplayer cross-platform ispirata al celebre gioco di società *Lupus in Fabula*. Sviluppata con **Flutter** e supportata da un'infrastruttura **Firebase**, l'app digitalizza l'esperienza del party game classico, eliminando la necessità di un mazzo di carte fisico e automatizzando le fasi di gioco.
+**Lupus in Pocket** è un'applicazione multiplayer cross-platform ispirata al celebre gioco di società *Lupus in Pocket*. Sviluppata con **Flutter** e supportata da un'infrastruttura **Firebase**, l'app digitalizza l'esperienza del party game classico, eliminando la necessità di un mazzo di carte fisico e automatizzando le fasi di gioco.
 
 Il progetto si concentra sulla creazione di un'atmosfera immersiva e dinamica, permettendo ai giocatori di gestire ruoli segreti, votazioni e fasi narrative direttamente dai propri dispositivi in tempo reale.
 
 ## 👁️ The Vision
-L'obiettivo di Lupus in Fabula è colmare il divario tra l'interazione sociale faccia a faccia e il gaming digitale. Invece di isolare i giocatori, l'app funge da "narratore digitale" e supporto logistico, facilitando le dinamiche di gruppo e rendendo il gioco accessibile anche a chi non conosce le regole complesse del modulo originale.
+L'obiettivo di Lupus in Pocket è colmare il divario tra l'interazione sociale faccia a faccia e il gaming digitale. Invece di isolare i giocatori, l'app funge da "narratore digitale" e supporto logistico, facilitando le dinamiche di gruppo e rendendo il gioco accessibile anche a chi non conosce le regole complesse del modulo originale.
 
 Il design è studiato per mantenere alta la tensione tipica del gioco, utilizzando temi dinamici e feedback visivi che si adattano al ritmo della narrazione.
 

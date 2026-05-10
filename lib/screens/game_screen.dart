@@ -488,9 +488,14 @@ class _GameScreenState extends State<GameScreen> {
 
   Widget _buildPlayerList(BuildContext context, Room room, GameProvider provider, Player me, GamePhaseTheme theme) {
     final userProvider = context.read<UserProvider>();
-    // Rimuove se stesso dalla lista dei votabili
-    final players = room.players.values.where((p) => p.id != provider.currentPlayerId).toList();
-    final canVote = room.phase == GamePhase.votazione || (room.phase == GamePhase.notte && (me.role == PlayerRole.lupo || me.role == PlayerRole.medico || me.role == PlayerRole.veggente || me.role == PlayerRole.strega || me.role == PlayerRole.cacciatore || me.role == PlayerRole.medium));
+    final players = room.players.values.where((p) {
+      if (p.id == provider.currentPlayerId) {
+        // Il guardiano può proteggere se stesso
+        return theme.isNight && me.role == PlayerRole.guardiano;
+      }
+      return true;
+    }).toList();
+    final canVote = room.phase == GamePhase.votazione || (room.phase == GamePhase.notte && (me.role == PlayerRole.lupo || me.role == PlayerRole.guardiano || me.role == PlayerRole.veggente || me.role == PlayerRole.strega || me.role == PlayerRole.cacciatore || me.role == PlayerRole.medium || me.role == PlayerRole.mitomane));
 
     return Column(
       children: [
@@ -563,10 +568,10 @@ class _GameScreenState extends State<GameScreen> {
                   
                   if (theme.isNight) {
                     if (me.role == PlayerRole.lupo) {
-                    } else if (me.role == PlayerRole.medico) {
+                    } else if (me.role == PlayerRole.guardiano) {
                       if (p.id == me.lastActionTargetId) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(userProvider.t('err_medic_twice'))),
+                          SnackBar(content: Text(userProvider.t('err_guardian_twice'))),
                         );
                         return;
                       }
@@ -639,7 +644,7 @@ class _GameScreenState extends State<GameScreen> {
                         textAlign: TextAlign.center,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      if (p.isAlive && ((!theme.isNight) || (theme.isNight && (me.role == PlayerRole.lupo || me.role == PlayerRole.medico || me.role == PlayerRole.veggente || me.role == PlayerRole.cacciatore))))
+                      if (p.isAlive && ((!theme.isNight) || (theme.isNight && (me.role == PlayerRole.lupo || me.role == PlayerRole.guardiano || me.role == PlayerRole.veggente || me.role == PlayerRole.cacciatore))))
                          Icon(Icons.touch_app, size: 12, color: theme.text.withOpacity(0.5)),
                       if (!p.isAlive && theme.isNight && me.role == PlayerRole.strega && !me.hasUsedPotion)
                          const Icon(Icons.auto_fix_high, size: 12, color: Colors.purpleAccent),
@@ -658,7 +663,7 @@ class _GameScreenState extends State<GameScreen> {
 
   Widget _buildActionButtons(BuildContext context, GameProvider provider, Room room, Player me, GamePhaseTheme theme) {
     if (!me.isAlive) return const SizedBox.shrink();
-    bool canVote = room.phase == GamePhase.votazione || (room.phase == GamePhase.notte && (me.role == PlayerRole.lupo || me.role == PlayerRole.medico || me.role == PlayerRole.veggente || me.role == PlayerRole.strega || me.role == PlayerRole.cacciatore || me.role == PlayerRole.medium));
+    bool canVote = room.phase == GamePhase.votazione || (room.phase == GamePhase.notte && (me.role == PlayerRole.lupo || me.role == PlayerRole.guardiano || me.role == PlayerRole.veggente || me.role == PlayerRole.strega || me.role == PlayerRole.cacciatore || me.role == PlayerRole.medium || me.role == PlayerRole.mitomane));
     if (!canVote) return const SizedBox.shrink();
 
     final userProvider = context.read<UserProvider>();
@@ -677,11 +682,12 @@ class _GameScreenState extends State<GameScreen> {
                 if (_selectedTargetId == null && me.votedFor == null) {
                   String hint = userProvider.t('hint_select_vote');
                   if (theme.isNight) {
-                    if (me.role == PlayerRole.medico) hint = userProvider.t('hint_medic');
+                    if (me.role == PlayerRole.guardiano) hint = userProvider.t('hint_guardian');
                     if (me.role == PlayerRole.veggente) hint = userProvider.t('hint_seer');
                     if (me.role == PlayerRole.strega) hint = userProvider.t('hint_witch');
                     if (me.role == PlayerRole.cacciatore) hint = userProvider.t('hint_hunter');
                     if (me.role == PlayerRole.medium) hint = userProvider.t('instruction_medium');
+                    if (me.role == PlayerRole.mitomane) hint = userProvider.t('hint_mitomane');
                   }
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(hint)),

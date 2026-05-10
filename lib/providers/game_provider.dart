@@ -121,7 +121,6 @@ class GameProvider with ChangeNotifier {
 
   Future<void> _processNightResults() async {
     if (!isHost || currentRoom == null) return;
-
     // 1. Calculate Wolf Majority Vote
     Map<String, int> wolfVotes = {};
     currentRoom!.players.forEach((id, player) {
@@ -133,42 +132,41 @@ class GameProvider with ChangeNotifier {
     String? victimId;
     if (wolfVotes.isNotEmpty) {
       int maxVotes = -1;
-      bool tie = false;
       wolfVotes.forEach((id, count) {
         if (count > maxVotes) {
           maxVotes = count;
           victimId = id;
-          tie = false;
-        } else if (count == maxVotes) {
-          tie = true;
         }
       });
-      if (tie) victimId = null; // Tie means no majority, no kill
     }
 
-    // 2. Check Doctor Protection
-    if (victimId != null && victimId == currentRoom!.medicProtectId) {
-      victimId = null; // Saved by the Doctor
+    // 2. Aggregate Protections (Support multiple Guardians)
+    Set<String> protectedIds = {};
+    for (var p in currentRoom!.players.values) {
+      if (p.isAlive && p.role == PlayerRole.guardiano && p.votedFor != null) {
+        protectedIds.add(p.votedFor!);
+      }
+    }
+
+    if (victimId != null && protectedIds.contains(victimId)) {
+      victimId = null; // Saved by a Doctor
     }
 
     // 3. Criceto Mannaro Logic
     if (victimId != null) {
       final victim = currentRoom!.players[victimId];
       if (victim?.role == PlayerRole.criceto_mannaro) {
-        // Doesn't die, becomes wolf
         await _firebaseService.assignRoles(currentRoom!.id, {victimId!: PlayerRole.lupo});
         victimId = null;
         await sendSystemMessage(AppTranslations.translate('msg_criceto_attacked', _language));
       }
     }
 
-    // 4. Witch Resurrection Logic
-    if (currentRoom!.witchActionTargetId != null) {
-      final witch = currentRoom!.players.values.firstWhere((p) => p.role == PlayerRole.strega && p.isAlive, orElse: () => currentRoom!.players.values.first);
-      if (witch.role == PlayerRole.strega && !witch.hasUsedPotion) {
-        final target = currentRoom!.players[currentRoom!.witchActionTargetId];
+    // 4. Witch Resurrection Logic (Handle all witches if multiple)
+    for (var witch in currentRoom!.players.values.where((p) => p.role == PlayerRole.strega && p.isAlive)) {
+      if (witch.votedFor != null && !witch.hasUsedPotion) {
+        final target = currentRoom!.players[witch.votedFor!];
         if (target != null && !target.isAlive) {
-           // Resurrect
            await _firebaseService.resurrectPlayer(currentRoom!.id, target.id);
            await _firebaseService.updatePlayerLastAction(currentRoom!.id, witch.id, null, hasUsedPotion: true);
            await sendSystemMessage(AppTranslations.translate('msg_resurrected', _language, args: {'name': target.name}));
@@ -176,26 +174,31 @@ class GameProvider with ChangeNotifier {
       }
     }
 
-    // 5. Update Doctor's Last Action Target
-    final actualMedic = currentRoom!.players.values.where((p) => p.role == PlayerRole.medico && p.isAlive).firstOrNull;
-    if (actualMedic != null) {
-      await _firebaseService.updatePlayerLastAction(currentRoom!.id, actualMedic.id, currentRoom!.medicProtectId);
+    // 5. Update Guardians' Last Action Targets
+    for (var guardiano in currentRoom!.players.values.where((p) => p.role == PlayerRole.guardiano && p.isAlive)) {
+       await _firebaseService.updatePlayerLastAction(currentRoom!.id, guardiano.id, guardiano.votedFor);
     }
 
-    // 5b. Hunter Kill Logic
-    String? hunterVictimId;
-    if (currentRoom!.hunterActionTargetId != null) {
-      final hunter = currentRoom!.players.values.firstWhere((p) => p.role == PlayerRole.cacciatore && p.isAlive, orElse: () => currentRoom!.players.values.first);
-      if (hunter.role == PlayerRole.cacciatore && !hunter.hasUsedBullet) {
-        String? hVictimId = currentRoom!.hunterActionTargetId;
-        // Se protetto dal medico, non muore
-        if (hVictimId != null && hVictimId == currentRoom!.medicProtectId) {
-          hVictimId = null; 
-        }
-        
-        if (hVictimId != null) {
-          hunterVictimId = hVictimId;
+    // 5b. Hunter Kill Logic (Support multiple Hunters)
+    Set<String> hunterVictimIds = {};
+    for (var hunter in currentRoom!.players.values.where((p) => p.role == PlayerRole.cacciatore && p.isAlive)) {
+      if (hunter.votedFor != null && !hunter.hasUsedBullet) {
+        String targetId = hunter.votedFor!;
+        if (!protectedIds.contains(targetId)) {
+          hunterVictimIds.add(targetId);
           await _firebaseService.updateHunterBullet(currentRoom!.id, hunter.id, true);
+        }
+      }
+    }
+
+    // 5c. Mythomaniac Transformation (Night 1 only)
+    if (currentRoom!.nightCount == 1) {
+      for (var mitomane in currentRoom!.players.values.where((p) => p.role == PlayerRole.mitomane && p.isAlive)) {
+        if (mitomane.votedFor != null) {
+           final target = currentRoom!.players[mitomane.votedFor!];
+           if (target != null && target.role != null) {
+              await _firebaseService.assignRoles(currentRoom!.id, {mitomane.id: target.role!});
+           }
         }
       }
     }
@@ -203,7 +206,7 @@ class GameProvider with ChangeNotifier {
     // 6. Handle Results and Chat Consolidation
     Set<String> tonightDead = {};
     if (victimId != null) tonightDead.add(victimId!);
-    if (hunterVictimId != null) tonightDead.add(hunterVictimId!);
+    for (var id in hunterVictimIds) tonightDead.add(id);
 
     if (tonightDead.isNotEmpty) {
       List<String> names = tonightDead.map((id) => currentRoom!.players[id]?.name ?? 'Qualcuno').toList();
@@ -211,7 +214,7 @@ class GameProvider with ChangeNotifier {
       
       await _firebaseService.setDeathAnnouncement(currentRoom!.id, {
         'playerName': namesStr,
-        'cause': 'wolf' // Animazione lupi/notte generica
+        'cause': 'wolf'
       });
 
       await sendSystemMessage(AppTranslations.translate('msg_suspicious_deaths', _language, args: {'names': namesStr}));
@@ -226,9 +229,6 @@ class GameProvider with ChangeNotifier {
       });
       await sendSystemMessage(AppTranslations.translate('msg_no_deaths', _language));
     }
-
-    // 7. Medium result is handled by the Medium themselves in UI (manual check)
-    // No automatic message anymore.
 
     await checkWinConditions();
     if (currentRoom!.status != RoomStatus.finished) {
@@ -355,7 +355,7 @@ class GameProvider with ChangeNotifier {
       count = count > 0 ? 2 : 0;
     }
 
-    if (role == PlayerRole.medico && count < 1) return;
+    if (role == PlayerRole.guardiano && count < 1) return;
     if (role == PlayerRole.veggente && count < 1) return;
     if (role == PlayerRole.lupo && count < 1) return;
     
@@ -389,6 +389,7 @@ class GameProvider with ChangeNotifier {
     await _firebaseService.resetVotes(currentRoom!.id);
 
     if (phase == GamePhase.notte) {
+      await _firebaseService.updateNightCount(currentRoom!.id, currentRoom!.nightCount + 1);
       await sendSystemMessage(AppTranslations.translate('msg_night_fall', _language));
     } else if (phase == GamePhase.discussione) {
       await sendSystemMessage(AppTranslations.translate('msg_day_break', _language));
@@ -434,12 +435,17 @@ class GameProvider with ChangeNotifier {
     } else if (currentRoom!.phase == GamePhase.notte) {
       if (player.role == PlayerRole.lupo) {
         await _firebaseService.setWerewolfVote(currentRoom!.id, currentPlayerId!, targetId);
-      } else if (player.role == PlayerRole.medico) {
+      } else if (player.role == PlayerRole.guardiano) {
         if (targetId == null) return;
+        // La regola ora è: non può proteggere lo stesso giocatore per 2 turni consecutivi
+        // Il check targetId == player.lastActionTargetId blocca il turno immediatamente precedente.
         if (targetId == player.lastActionTargetId) {
           return;
         }
-        await _firebaseService.setMedicProtect(currentRoom!.id, currentPlayerId!, targetId);
+        await _firebaseService.setGuardianProtect(currentRoom!.id, currentPlayerId!, targetId);
+      } else if (player.role == PlayerRole.mitomane) {
+        if (targetId == null || currentRoom!.nightCount > 1) return;
+        await _firebaseService.setMitomaneAction(currentRoom!.id, currentPlayerId!, targetId);
       } else if (player.role == PlayerRole.veggente) {
         if (targetId == null) return;
         await _firebaseService.setSeerCheck(currentRoom!.id, currentPlayerId!, targetId);

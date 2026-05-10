@@ -334,7 +334,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   Widget _buildRoleConfigRow(BuildContext context, PlayerRole role, Room room, GameProvider provider, bool isHost) {
     final userProvider = context.read<UserProvider>();
     final count = room.selectedRoles[role] ?? 0;
-    final isMandatory = role == PlayerRole.lupo || role == PlayerRole.veggente || role == PlayerRole.medico;
+    final isMandatory = role == PlayerRole.lupo || role == PlayerRole.veggente || role == PlayerRole.guardiano;
     final isMulti = role == PlayerRole.lupo || role == PlayerRole.contadino;
 
     return Padding(

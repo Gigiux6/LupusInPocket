@@ -15,7 +15,7 @@ class Room {
   final String? lastKilledId;
   final String? winnerTeam;
   final String? werewolfVote;
-  final String? medicProtectId;
+  final String? guardianProtectId;
   final String? seerCheckId;
   final String? witchActionTargetId;
   final String? hunterActionTargetId;
@@ -23,6 +23,7 @@ class Room {
   final int discussionDuration;
   final int voteDuration;
   final int nightDuration;
+  final int nightCount;
   final Map<PlayerRole, int> selectedRoles;
   final String? lastSystemMessage;
   final Map<String, dynamic>? deathAnnouncement;
@@ -38,7 +39,7 @@ class Room {
     this.lastKilledId,
     this.winnerTeam,
     this.werewolfVote,
-    this.medicProtectId,
+    this.guardianProtectId,
     this.seerCheckId,
     this.witchActionTargetId,
     this.hunterActionTargetId,
@@ -46,59 +47,47 @@ class Room {
     this.discussionDuration = 180,
     this.voteDuration = 30,
     this.nightDuration = 30,
+    this.nightCount = 1,
     this.selectedRoles = const {
       PlayerRole.lupo: 1,
+      PlayerRole.contadino: 4,
       PlayerRole.veggente: 1,
-      PlayerRole.medico: 1,
-      PlayerRole.contadino: 1,
+      PlayerRole.guardiano: 1,
     },
     this.lastSystemMessage,
     this.deathAnnouncement,
   });
 
   factory Room.fromMap(String id, Map<dynamic, dynamic> map) {
-    var statusStr = map['status'] ?? 'lobby';
-    var phaseStr = map['phase'] ?? 'discussione';
-    
-    var playersMap = map['players'] as Map<dynamic, dynamic>? ?? {};
     Map<String, Player> players = {};
-    playersMap.forEach((key, value) {
-      if (value != null) {
-        players[key.toString()] = Player.fromMap(key.toString(), value as Map<dynamic, dynamic>);
-      }
-    });
+    if (map['players'] != null) {
+      (map['players'] as Map<dynamic, dynamic>).forEach((k, v) {
+        players[k.toString()] = Player.fromMap(k.toString(), v as Map<dynamic, dynamic>);
+      });
+    }
 
-    var rolesMapRaw = map['selectedRoles'] as Map<dynamic, dynamic>? ?? {};
-    Map<PlayerRole, int> selectedRoles = {};
-    rolesMapRaw.forEach((key, value) {
-      try {
-        final role = PlayerRole.values.firstWhere((e) => e.name == key.toString());
-        selectedRoles[role] = (value as num).toInt();
-      } catch (_) {}
-    });
-    
-    // Ensure default roles if empty
-    if (selectedRoles.isEmpty) {
-      selectedRoles = {
-        PlayerRole.lupo: 1,
-        PlayerRole.veggente: 1,
-        PlayerRole.medico: 1,
-        PlayerRole.contadino: 1,
-      };
+    Map<PlayerRole, int> roles = {};
+    if (map['selectedRoles'] != null) {
+      (map['selectedRoles'] as Map<dynamic, dynamic>).forEach((k, v) {
+        try {
+          final role = PlayerRole.values.firstWhere((e) => e.name == k.toString());
+          roles[role] = (v as num).toInt();
+        } catch (_) {}
+      });
     }
 
     return Room(
       id: id,
       hostId: map['hostId'] ?? '',
-      status: RoomStatus.values.firstWhere((e) => e.name == statusStr, orElse: () => RoomStatus.lobby),
-      phase: GamePhase.values.firstWhere((e) => e.name == phaseStr, orElse: () => GamePhase.discussione),
+      status: RoomStatus.values.firstWhere((e) => e.name == (map['status'] ?? 'lobby'), orElse: () => RoomStatus.lobby),
+      phase: GamePhase.values.firstWhere((e) => e.name == (map['phase'] ?? 'discussione'), orElse: () => GamePhase.discussione),
       phaseEndTime: map['phaseEndTime'],
-      turnOrder: map['turnOrder'] != null ? List<String>.from(map['turnOrder'] as List<dynamic>) : [],
+      turnOrder: List<String>.from(map['turnOrder'] ?? []),
       players: players,
       lastKilledId: map['lastKilledId'],
       winnerTeam: map['winnerTeam'],
       werewolfVote: map['werewolfVote'],
-      medicProtectId: map['medicProtectId'],
+      guardianProtectId: map['guardianProtectId'],
       seerCheckId: map['seerCheckId'],
       witchActionTargetId: map['witchActionTargetId'],
       hunterActionTargetId: map['hunterActionTargetId'],
@@ -106,7 +95,8 @@ class Room {
       discussionDuration: map['discussionDuration'] ?? 180,
       voteDuration: map['voteDuration'] ?? 30,
       nightDuration: map['nightDuration'] ?? 30,
-      selectedRoles: selectedRoles,
+      nightCount: map['nightCount'] ?? 1,
+      selectedRoles: roles,
       lastSystemMessage: map['lastSystemMessage'],
       deathAnnouncement: map['deathAnnouncement'] != null ? Map<String, dynamic>.from(map['deathAnnouncement'] as Map) : null,
     );
@@ -119,11 +109,11 @@ class Room {
       'phase': phase.name,
       'phaseEndTime': phaseEndTime,
       'turnOrder': turnOrder,
-      'players': players.map((key, value) => MapEntry(key, value.toMap())),
+      'players': players.map((k, v) => MapEntry(k, v.toMap())),
       'lastKilledId': lastKilledId,
       'winnerTeam': winnerTeam,
       'werewolfVote': werewolfVote,
-      'medicProtectId': medicProtectId,
+      'guardianProtectId': guardianProtectId,
       'seerCheckId': seerCheckId,
       'witchActionTargetId': witchActionTargetId,
       'hunterActionTargetId': hunterActionTargetId,
@@ -131,7 +121,8 @@ class Room {
       'discussionDuration': discussionDuration,
       'voteDuration': voteDuration,
       'nightDuration': nightDuration,
-      'selectedRoles': selectedRoles.map((key, value) => MapEntry(key.name, value)),
+      'nightCount': nightCount,
+      'selectedRoles': selectedRoles.map((k, v) => MapEntry(k.name, v)),
       'lastSystemMessage': lastSystemMessage,
       'deathAnnouncement': deathAnnouncement,
     };

@@ -1,4 +1,4 @@
-enum PlayerRole { lupo, contadino, veggente, medico, massoni, medium, criceto_mannaro, jolly, strega, cacciatore, indemoniato }
+enum PlayerRole { lupo, contadino, veggente, guardiano, massoni, medium, criceto_mannaro, jolly, strega, cacciatore, indemoniato, mitomane }
 
 class Player {
   final String id;
@@ -9,6 +9,7 @@ class Player {
   final String? avatarUrl;
   final String? lastActionTargetId;
   final bool hasUsedPotion;
+  final bool hasUsedBullet;
   final bool inLobby;
 
   Player({
@@ -24,13 +25,11 @@ class Player {
     this.inLobby = false,
   });
 
-  final bool hasUsedBullet;
-
   factory Player.fromMap(String id, Map<dynamic, dynamic> map) {
     return Player(
       id: id,
       name: map['name'] ?? '',
-      role: map['role'] != null ? PlayerRole.values.firstWhere((e) => e.name == map['role']) : null,
+      role: map['role'] != null ? PlayerRole.values.firstWhere((e) => e.name == map['role'], orElse: () => PlayerRole.contadino) : null,
       isAlive: map['isAlive'] ?? true,
       votedFor: map['votedFor'],
       avatarUrl: map['avatarUrl'],
@@ -64,6 +63,8 @@ class Player {
     String? avatarUrl,
     String? lastActionTargetId,
     bool? hasUsedPotion,
+    bool? hasUsedBullet,
+    bool? inLobby,
   }) {
     return Player(
       id: id ?? this.id,
@@ -74,6 +75,7 @@ class Player {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       lastActionTargetId: lastActionTargetId ?? this.lastActionTargetId,
       hasUsedPotion: hasUsedPotion ?? this.hasUsedPotion,
+      hasUsedBullet: hasUsedBullet ?? this.hasUsedBullet,
       inLobby: inLobby ?? this.inLobby,
     );
   }
