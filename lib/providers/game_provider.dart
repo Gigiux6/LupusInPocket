@@ -7,7 +7,7 @@ import '../models/message.dart';
 import '../services/firebase_service.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../data/translations.dart';
-import 'package:lupus_in_fabula/providers/user_provider.dart';
+import 'package:lupus_in_pocket/providers/user_provider.dart';
 
 class GameProvider with ChangeNotifier {
   final FirebaseService _firebaseService = FirebaseService();

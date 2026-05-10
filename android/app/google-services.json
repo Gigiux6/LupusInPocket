@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "248731957793",
+    "firebase_url": "https://lupus-in-pocket-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "lupus-in-pocket",
+    "storage_bucket": "lupus-in-pocket.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:248731957793:android:b6ef4d39af1683a053c160",
+        "android_client_info": {
+          "package_name": "com.gigiux.lupus_in_pocket"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwNowDmuA8NZ791POXpD_Y5e9kKK4iWFk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
