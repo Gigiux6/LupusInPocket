@@ -1,4 +1,4 @@
-enum PlayerRole { lupo, contadino, veggente, medico, massoni, medium, criceto_mannaro, jolly, strega }
+enum PlayerRole { lupo, contadino, veggente, medico, massoni, medium, criceto_mannaro, jolly, strega, cacciatore, indemoniato }
 
 class Player {
   final String id;
@@ -9,6 +9,7 @@ class Player {
   final String? avatarUrl;
   final String? lastActionTargetId;
   final bool hasUsedPotion;
+  final bool inLobby;
 
   Player({
     required this.id,
@@ -19,7 +20,11 @@ class Player {
     this.avatarUrl,
     this.lastActionTargetId,
     this.hasUsedPotion = false,
+    this.hasUsedBullet = false,
+    this.inLobby = false,
   });
+
+  final bool hasUsedBullet;
 
   factory Player.fromMap(String id, Map<dynamic, dynamic> map) {
     return Player(
@@ -31,6 +36,8 @@ class Player {
       avatarUrl: map['avatarUrl'],
       lastActionTargetId: map['lastActionTargetId'],
       hasUsedPotion: map['hasUsedPotion'] ?? false,
+      hasUsedBullet: map['hasUsedBullet'] ?? false,
+      inLobby: map['inLobby'] ?? false,
     );
   }
 
@@ -43,6 +50,8 @@ class Player {
       'avatarUrl': avatarUrl,
       'lastActionTargetId': lastActionTargetId,
       'hasUsedPotion': hasUsedPotion,
+      'hasUsedBullet': hasUsedBullet,
+      'inLobby': inLobby,
     };
   }
 
@@ -65,6 +74,7 @@ class Player {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       lastActionTargetId: lastActionTargetId ?? this.lastActionTargetId,
       hasUsedPotion: hasUsedPotion ?? this.hasUsedPotion,
+      inLobby: inLobby ?? this.inLobby,
     );
   }
 }

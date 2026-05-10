@@ -23,6 +23,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
     final userProvider = context.watch<UserProvider>();
     gameProvider.setLanguage(userProvider.language);
     
+    // Segna il giocatore come presente in lobby
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      gameProvider.setInLobby(true);
+    });
+    
     final room = gameProvider.currentRoom;
     final isHost = gameProvider.isHost;
 
@@ -43,7 +48,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (room.status == RoomStatus.playing && ModalRoute.of(context)?.isCurrent == true) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const GameScreen()));
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const GameScreen()));
       }
       
       if (room.lastSystemMessage != null) {
@@ -145,6 +150,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     final userProvider = context.watch<UserProvider>();
     final totalRoles = room.selectedRoles.values.fold(0, (sum, count) => sum + count);
     final isCorrectCount = totalRoles == room.players.length;
+    final allInLobby = room.players.values.every((p) => p.inLobby);
 
     return Column(
       children: [
@@ -171,23 +177,25 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       trailing: player.id == room.hostId ? const Icon(Icons.star, color: Colors.amber) : null,
                     ),
                   )),
-              if (isHost) ...[
-                const Divider(color: Colors.white54, height: 40),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.black, width: 2),
-                  ),
-                  child: _buildHostSettings(context, gameProvider, isCorrectCount),
+              const Divider(color: Colors.white54, height: 40),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.black, width: 2),
                 ),
-              ] else ...[
+                child: _buildHostSettings(context, gameProvider, isCorrectCount),
+              ),
+              if (!isHost)
                 Padding(
                   padding: const EdgeInsets.all(16.0),
-                  child: Text(userProvider.t('waiting_host'), textAlign: TextAlign.center),
+                  child: Text(
+                    userProvider.t('waiting_host'), 
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontStyle: FontStyle.italic),
+                  ),
                 ),
-              ]
             ],
           ),
         ),
@@ -204,9 +212,17 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                     ),
                   ),
+                if (!allInLobby)
+                  const Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: Text(
+                      "In attesa che tutti i giocatori rientrino in lobby...",
+                      style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 CustomButton(
                   text: userProvider.t('start_game'),
-                  onPressed: (!isCorrectCount || room.players.length < 4)
+                  onPressed: (!isCorrectCount || room.players.length < 4 || !allInLobby)
                     ? null 
                     : () {
                         gameProvider.startGame();
@@ -232,13 +248,15 @@ class _LobbyScreenState extends State<LobbyScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(userProvider.t('host_settings'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        Text(userProvider.t('room_settings'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         const SizedBox(height: 16),
         
         // Durations as already implemented
-        _buildDurationSetting(context, userProvider.t('discussion_duration'), room.discussionDuration, (val) => gameProvider.updateRoomDurations(val, room.voteDuration), isHost),
+        _buildDurationSetting(context, userProvider.t('night_duration'), room.nightDuration, (val) => gameProvider.updateRoomDurations(room.discussionDuration, room.voteDuration, val), isHost),
         const SizedBox(height: 12),
-        _buildDurationSetting(context, userProvider.t('vote_duration'), room.voteDuration, (val) => gameProvider.updateRoomDurations(room.discussionDuration, val), isHost),
+        _buildDurationSetting(context, userProvider.t('discussion_duration'), room.discussionDuration, (val) => gameProvider.updateRoomDurations(val, room.voteDuration, room.nightDuration), isHost),
+        const SizedBox(height: 12),
+        _buildDurationSetting(context, userProvider.t('vote_duration'), room.voteDuration, (val) => gameProvider.updateRoomDurations(room.discussionDuration, val, room.nightDuration), isHost),
         
         const Divider(color: Colors.white54, height: 40),
         

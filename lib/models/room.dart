@@ -18,10 +18,14 @@ class Room {
   final String? medicProtectId;
   final String? seerCheckId;
   final String? witchActionTargetId;
+  final String? hunterActionTargetId;
+  final String? mediumCheckId;
   final int discussionDuration;
   final int voteDuration;
+  final int nightDuration;
   final Map<PlayerRole, int> selectedRoles;
   final String? lastSystemMessage;
+  final Map<String, dynamic>? deathAnnouncement;
 
   Room({
     required this.id,
@@ -37,8 +41,11 @@ class Room {
     this.medicProtectId,
     this.seerCheckId,
     this.witchActionTargetId,
+    this.hunterActionTargetId,
+    this.mediumCheckId,
     this.discussionDuration = 180,
     this.voteDuration = 30,
+    this.nightDuration = 30,
     this.selectedRoles = const {
       PlayerRole.lupo: 1,
       PlayerRole.veggente: 1,
@@ -46,6 +53,7 @@ class Room {
       PlayerRole.contadino: 1,
     },
     this.lastSystemMessage,
+    this.deathAnnouncement,
   });
 
   factory Room.fromMap(String id, Map<dynamic, dynamic> map) {
@@ -93,10 +101,14 @@ class Room {
       medicProtectId: map['medicProtectId'],
       seerCheckId: map['seerCheckId'],
       witchActionTargetId: map['witchActionTargetId'],
+      hunterActionTargetId: map['hunterActionTargetId'],
+      mediumCheckId: map['mediumCheckId'],
       discussionDuration: map['discussionDuration'] ?? 180,
       voteDuration: map['voteDuration'] ?? 30,
+      nightDuration: map['nightDuration'] ?? 30,
       selectedRoles: selectedRoles,
       lastSystemMessage: map['lastSystemMessage'],
+      deathAnnouncement: map['deathAnnouncement'] != null ? Map<String, dynamic>.from(map['deathAnnouncement'] as Map) : null,
     );
   }
 
@@ -114,10 +126,14 @@ class Room {
       'medicProtectId': medicProtectId,
       'seerCheckId': seerCheckId,
       'witchActionTargetId': witchActionTargetId,
+      'hunterActionTargetId': hunterActionTargetId,
+      'mediumCheckId': mediumCheckId,
       'discussionDuration': discussionDuration,
       'voteDuration': voteDuration,
+      'nightDuration': nightDuration,
       'selectedRoles': selectedRoles.map((key, value) => MapEntry(key.name, value)),
       'lastSystemMessage': lastSystemMessage,
+      'deathAnnouncement': deathAnnouncement,
     };
   }
 }

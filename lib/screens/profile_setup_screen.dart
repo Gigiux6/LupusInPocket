@@ -18,8 +18,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   void _submit() async {
     if (_nameController.text.trim().isEmpty) {
+      final up = context.read<UserProvider>();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Per favore, inserisci un nickname!')),
+        SnackBar(content: Text(up.t('enter_nickname_error'))),
       );
       return;
     }
@@ -37,6 +38,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final userProvider = context.watch<UserProvider>();
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -46,22 +48,22 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'Benvenuto!',
+                  userProvider.t('welcome_title'),
                   style: Theme.of(context).textTheme.displayLarge,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),
-                const Text(
-                  'Come vuoi farti chiamare dagli altri giocatori?',
+                Text(
+                  userProvider.t('nickname_prompt'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 18),
+                  style: const TextStyle(fontSize: 18),
                 ),
                 const SizedBox(height: 60),
                 TextField(
                   controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Il tuo Nickname',
-                    prefixIcon: Icon(Icons.face),
+                  decoration: InputDecoration(
+                    labelText: userProvider.t('nickname_label'),
+                    prefixIcon: const Icon(Icons.face),
                   ),
                 ),
                 const SizedBox(height: 40),
@@ -71,7 +73,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: CustomButton(
-                      text: 'COMINCIAMO!',
+                      text: userProvider.t('enter_game'),
                       onPressed: _submit,
                     ),
                   ),

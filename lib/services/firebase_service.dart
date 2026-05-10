@@ -35,9 +35,14 @@ class FirebaseService {
   }
 
   Future<bool> joinRoom(String roomId, Player player) async {
-    final roomSnapshot = await _db.child('rooms/$roomId').get();
-    if (!roomSnapshot.exists || roomSnapshot.child('hostId').value == null) {
-      return false;
+    final existingPlayer = await _db.child('rooms/$roomId/players/${player.id}').get();
+    if (existingPlayer.exists) {
+      // Se il giocatore esiste già e ha già un ruolo, non sovrascriviamo tutto
+      final data = existingPlayer.value as Map<dynamic, dynamic>;
+      if (data['role'] != null) {
+        // Aggiorniamo solo eventuali info profilo se necessario, ma non il ruolo/stato
+        return true;
+      }
     }
 
     await _db.child('rooms/$roomId/players/${player.id}').set(player.toMap());
@@ -87,16 +92,24 @@ class FirebaseService {
     await _db.child('rooms/$roomId/players/$voterId/votedFor').set(targetId);
   }
 
-  Future<void> setMedicProtect(String roomId, String targetId) async {
+  Future<void> setMedicProtect(String roomId, String medicId, String targetId) async {
     await _db.child('rooms/$roomId/medicProtectId').set(targetId);
+    await _db.child('rooms/$roomId/players/$medicId/votedFor').set(targetId);
   }
 
-  Future<void> setSeerCheck(String roomId, String targetId) async {
+  Future<void> setSeerCheck(String roomId, String seerId, String targetId) async {
     await _db.child('rooms/$roomId/seerCheckId').set(targetId);
+    await _db.child('rooms/$roomId/players/$seerId/votedFor').set(targetId);
   }
 
-  Future<void> setWitchAction(String roomId, String? targetId) async {
+  Future<void> setWitchAction(String roomId, String witchId, String targetId) async {
     await _db.child('rooms/$roomId/witchActionTargetId').set(targetId);
+    await _db.child('rooms/$roomId/players/$witchId/votedFor').set(targetId);
+  }
+
+  Future<void> setHunterAction(String roomId, String hunterId, String targetId) async {
+    await _db.child('rooms/$roomId/hunterActionTargetId').set(targetId);
+    await _db.child('rooms/$roomId/players/$hunterId/votedFor').set(targetId);
   }
 
   Future<void> killPlayer(String roomId, String playerId) async {
@@ -106,6 +119,15 @@ class FirebaseService {
 
   Future<void> resurrectPlayer(String roomId, String playerId) async {
     await _db.child('rooms/$roomId/players/$playerId/isAlive').set(true);
+  }
+
+  Future<void> setDeathAnnouncement(String roomId, Map<String, dynamic>? announcement) async {
+    await _db.child('rooms/$roomId/deathAnnouncement').set(announcement);
+  }
+
+  Future<void> setMediumCheck(String roomId, String mediumId, String targetId) async {
+    await _db.child('rooms/$roomId/mediumCheckId').set(targetId);
+    await _db.child('rooms/$roomId/players/$mediumId/votedFor').set(targetId);
   }
 
   Future<void> resetVotes(String roomId) async {
@@ -120,6 +142,8 @@ class FirebaseService {
       updates['medicProtectId'] = null;
       updates['seerCheckId'] = null;
       updates['witchActionTargetId'] = null;
+      updates['hunterActionTargetId'] = null;
+      updates['mediumCheckId'] = null;
       await _db.child('rooms/$roomId').update(updates);
     }
   }
@@ -134,6 +158,8 @@ class FirebaseService {
         updates['players/$key/role'] = null;
         updates['players/$key/isAlive'] = true;
         updates['players/$key/votedFor'] = null;
+        updates['players/$key/inLobby'] = false;
+        updates['players/$key/hasUsedBullet'] = false;
       });
       
       updates['status'] = RoomStatus.lobby.name;
@@ -146,6 +172,8 @@ class FirebaseService {
       updates['medicProtectId'] = null;
       updates['seerCheckId'] = null;
       updates['witchActionTargetId'] = null;
+      updates['hunterActionTargetId'] = null;
+      updates['mediumCheckId'] = null;
       
       await _db.child('rooms/$roomId').update(updates);
     }
@@ -177,6 +205,14 @@ class FirebaseService {
     await _db.child('rooms/$roomId/players/$playerId').update(updates);
   }
 
+  Future<void> updatePlayerLobbyStatus(String roomId, String playerId, bool inLobby) async {
+    await _db.child('rooms/$roomId/players/$playerId/inLobby').set(inLobby);
+  }
+
+  Future<void> updateHunterBullet(String roomId, String playerId, bool hasUsed) async {
+    await _db.child('rooms/$roomId/players/$playerId/hasUsedBullet').set(hasUsed);
+  }
+
   Future<Map<dynamic, dynamic>?> getUserProfile(String uid) async {
     final snapshot = await _db.child('users/$uid').get();
     if (snapshot.exists) {
@@ -200,10 +236,11 @@ class FirebaseService {
     await ref.set(current + 1);
   }
 
-  Future<void> updateRoomDurations(String roomId, int discussion, int vote) async {
+  Future<void> updateRoomDurations(String roomId, int discussion, int vote, int night) async {
     await _db.child('rooms/$roomId').update({
       'discussionDuration': discussion,
       'voteDuration': vote,
+      'nightDuration': night,
     });
   }
 
