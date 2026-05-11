@@ -6,6 +6,7 @@ import '../models/room.dart';
 import '../models/player.dart';
 import '../models/message.dart';
 import '../widgets/custom_button.dart';
+import 'home_screen.dart';
 import '../data/translations.dart';
 import '../theme/app_theme.dart';
 import 'dart:math';
@@ -74,7 +75,12 @@ class _GameScreenState extends State<GameScreen> {
       // Se la stanza è null, l'host ha chiuso tutto
       if (room == null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+          if (mounted) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => HomeScreen()),
+              (route) => false,
+            );
+          }
         });
       }
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -863,7 +869,10 @@ class _GameScreenState extends State<GameScreen> {
                     await provider.leaveRoom(name: name);
                     await userProvider.setLastRoomId(null);
                     if (context.mounted) {
-                      Navigator.of(context).popUntil((route) => route.isFirst);
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => HomeScreen()),
+                        (route) => false,
+                      );
                     }
                   },
                 ),
@@ -893,7 +902,10 @@ class _GameScreenState extends State<GameScreen> {
               await provider.leaveRoom(name: name);
               await context.read<UserProvider>().setLastRoomId(null);
               if (context.mounted) {
-                Navigator.of(context).popUntil((route) => route.isFirst);
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => HomeScreen()),
+                  (route) => false,
+                );
               }
             },
             child: const Text("ESCI", style: TextStyle(color: Colors.red)),

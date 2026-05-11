@@ -7,6 +7,7 @@ import '../models/player.dart';
 import '../widgets/custom_button.dart';
 import 'game_screen.dart';
 import '../data/translations.dart';
+import 'home_screen.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 class LobbyScreen extends StatefulWidget {
@@ -36,7 +37,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
          WidgetsBinding.instance.addPostFrameCallback((_) {
           if (ModalRoute.of(context)?.isCurrent == true) {
             context.read<UserProvider>().setLastRoomId(null);
-            Navigator.of(context).popUntil((route) => route.isFirst);
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => HomeScreen()),
+              (route) => false,
+            );
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(context.read<UserProvider>().t('room_closed_host'))),
             );
@@ -86,7 +90,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
           await gameProvider.leaveRoom(name: name);
           await userProvider.setLastRoomId(null);
           if (mounted) {
-            Navigator.of(context).popUntil((route) => route.isFirst);
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => HomeScreen()),
+              (route) => false,
+            );
           }
         }
       },
