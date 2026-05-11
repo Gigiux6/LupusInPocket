@@ -88,7 +88,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: dayAccent, width: 3),
+          borderSide: const BorderSide(color: goldBorder, width: 3),
         ),
         labelStyle: const TextStyle(color: Colors.black54),
       ),
