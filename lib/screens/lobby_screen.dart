@@ -378,7 +378,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             if (isHost)
               Switch(
                 value: count > 0,
-                onChanged: isMandatory && count > 0 ? null : (val) => provider.updateRoleCount(role, val ? 1 : 0),
+                onChanged: (isMandatory && count > 0) ? (val) {} : (val) => provider.updateRoleCount(role, val ? 1 : 0),
                 activeColor: AppTheme.leatherBrown,
                 activeTrackColor: AppTheme.leatherBrown.withOpacity(0.4),
                 inactiveThumbColor: AppTheme.dayText.withOpacity(0.3),
