@@ -8,6 +8,7 @@ import '../widgets/custom_button.dart';
 import 'game_screen.dart';
 import '../data/translations.dart';
 import 'home_screen.dart';
+import '../theme/app_theme.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 class LobbyScreen extends StatefulWidget {
@@ -378,7 +379,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
               Switch(
                 value: count > 0,
                 onChanged: isMandatory && count > 0 ? null : (val) => provider.updateRoleCount(role, val ? 1 : 0),
-                activeColor: Colors.blueAccent,
+                activeColor: AppTheme.leatherBrown,
+                activeTrackColor: AppTheme.leatherBrown.withOpacity(0.4),
+                inactiveThumbColor: AppTheme.dayText.withOpacity(0.3),
+                inactiveTrackColor: AppTheme.dayText.withOpacity(0.1),
               )
             else
               Icon(
