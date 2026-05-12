@@ -24,12 +24,14 @@ class _GameScreenState extends State<GameScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   String? _selectedTargetId;
+  PlayerRole? _lastRole;
   GamePhase? _lastPhase;
   String? _seerRevealMessage;
 
   @override
   void initState() {
     super.initState();
+    _lastRole = context.read<GameProvider>().me?.role;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<GameProvider>().setInLobby(false);
     });
@@ -71,6 +73,17 @@ class _GameScreenState extends State<GameScreen> {
     final room = gameProvider.currentRoom;
     final me = gameProvider.me;
 
+    // Detect Mitomane role change
+    if (me != null && _lastRole != null && _lastRole == PlayerRole.mitomane && me.role != PlayerRole.mitomane) {
+      final newRole = me.role!;
+      _lastRole = newRole; // Update to avoid double popup
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showMitomaneResult(context, newRole);
+      });
+    } else if (me != null && _lastRole != me.role) {
+      _lastRole = me.role;
+    }
+
     if (room == null || (me == null && room.status != RoomStatus.lobby)) {
       // Se la stanza è null, l'host ha chiuso tutto
       if (room == null) {
@@ -87,16 +100,7 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     if (room.deathAnnouncement != null) {
-       return DeathAnnouncementOverlay(
-         key: ValueKey(room.deathAnnouncement!['playerName'] ?? 'none'),
-         playerName: room.deathAnnouncement!['playerName'],
-         causeOfDeath: room.deathAnnouncement!['cause'] ?? 'none',
-         onFinished: () {
-           // CHIUNQUE può pulire l'annuncio dopo che l'animazione è finita.
-           // Questo evita blocchi se l'host si disconnette durante l'overlay.
-           gameProvider.clearDeathAnnouncement();
-         },
-       );
+       return _buildDeathOverlay(room, gameProvider);
     }
 
     if (room.status == RoomStatus.finished) {
@@ -163,7 +167,7 @@ class _GameScreenState extends State<GameScreen> {
               children: [
                 Column(
                   children: [
-                    _buildHeader(context, room, gameProvider, theme),
+                    _buildHeader(context, room, gameProvider, me!, theme),
                     _buildRoleBanner(context, me!, theme),
                     Expanded(
                       child: Row(
@@ -246,7 +250,7 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildHeader(BuildContext context, Room room, GameProvider provider, GamePhaseTheme theme) {
+  Widget _buildHeader(BuildContext context, Room room, GameProvider provider, Player me, GamePhaseTheme theme) {
     final userProvider = context.read<UserProvider>();
     return Container(
       padding: const EdgeInsets.all(16),
@@ -264,24 +268,9 @@ class _GameScreenState extends State<GameScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      theme.isNight ? Icons.nightlight_round : Icons.wb_sunny,
-                      color: theme.accent,
-                      size: 24,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      room.phase == GamePhase.notte ? userProvider.t('phase_notte') : (room.phase == GamePhase.discussione ? userProvider.t('phase_discussione') : userProvider.t('phase_votazione')),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: theme.accent,
-                      ),
-                    ),
-                  ],
+                IconButton(
+                  icon: Icon(Icons.arrow_back, color: theme.text),
+                  onPressed: () => _showExitDialog(context, provider),
                 ),
                 Text(
                   "${userProvider.t('room_label')}: ${room.id}",
@@ -290,21 +279,32 @@ class _GameScreenState extends State<GameScreen> {
               ],
             ),
           ),
-          // Central Name (Perfectly Centered)
+          // Central Phase Info (Perfectly Centered)
           Align(
             alignment: Alignment.center,
-            child: Text(
-              provider.me?.name ?? "",
-              style: TextStyle(
-                color: theme.accent,
-                fontWeight: FontWeight.w900,
-                fontSize: 24, // Ingrandito
-                letterSpacing: 1.5,
-                shadows: [
-                  Shadow(color: Colors.black.withOpacity(0.5), offset: const Offset(2, 2), blurRadius: 4),
-                  Shadow(color: theme.accent.withOpacity(0.3), blurRadius: 10),
-                ],
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  theme.isNight ? Icons.nightlight_round : Icons.wb_sunny,
+                  color: theme.accent,
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  (room.phase == GamePhase.notte ? userProvider.t('phase_notte') : (room.phase == GamePhase.discussione ? userProvider.t('phase_discussione') : userProvider.t('phase_votazione'))).toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: theme.accent,
+                    fontFamily: 'Medieval',
+                    letterSpacing: 2,
+                    shadows: [
+                      Shadow(color: Colors.black.withOpacity(0.5), offset: const Offset(2, 2), blurRadius: 4),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
           // Right Side Timer
@@ -347,19 +347,63 @@ class _GameScreenState extends State<GameScreen> {
       ),
       child: Column(
         children: [
-          Text(
-            userProvider.t('identity_is'),
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: theme.text.withOpacity(0.7)),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8.0),
+                  child: IconButton(
+                    icon: Icon(Icons.info_outline, color: theme.accent.withOpacity(0.8), size: 26),
+                    onPressed: () => _showRoleInfo(context, me.role!),
+                  ),
+                ),
+              ),
+              RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: TextStyle(fontSize: 14, color: theme.text.withOpacity(0.7), fontFamily: 'Medieval'),
+                  children: [
+                    TextSpan(
+                      text: "${me.name}, ",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                        color: theme.accent,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    TextSpan(text: userProvider.t('identity_is')),
+                  ],
+                ),
+              ),
+            ],
           ),
-          Text(
-            "${AppTranslations.roleEmojis[me.role?.name] ?? ''} ${userProvider.t('role_${me.role?.name}')}",
-            style: TextStyle(
-              fontWeight: FontWeight.w900, 
-              fontSize: 24, 
-              color: isLupo ? Colors.redAccent : theme.accent,
-              shadows: isLupo ? [const Shadow(color: Colors.black, blurRadius: 4)] : null,
-            ),
-          ),
+          (me.role == PlayerRole.jolly || me.role == PlayerRole.mitomane) 
+            ? ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [Colors.red, Colors.orange, Colors.yellow, Colors.green, Colors.blue, Colors.indigo, Colors.purple],
+                ).createShader(bounds),
+                child: Text(
+                  "${AppTranslations.roleEmojis[me.role?.name] ?? ''} ${userProvider.t('role_${me.role?.name}')}",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900, 
+                    fontSize: 24, 
+                    color: Colors.white,
+                  ),
+                ),
+              )
+            : Text(
+                "${AppTranslations.roleEmojis[me.role?.name] ?? ''} ${userProvider.t('role_${me.role?.name}')}",
+                style: TextStyle(
+                  fontWeight: FontWeight.w900, 
+                  fontSize: 24, 
+                  color: (isLupo || me.role == PlayerRole.indemoniato) ? Colors.redAccent : theme.accent,
+                  shadows: (isLupo || me.role == PlayerRole.indemoniato) ? [const Shadow(color: Colors.black, blurRadius: 4)] : null,
+                ),
+              ),
+
           if (theme.isNight)
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -494,6 +538,7 @@ class _GameScreenState extends State<GameScreen> {
 
   Widget _buildPlayerList(BuildContext context, Room room, GameProvider provider, Player me, GamePhaseTheme theme) {
     final userProvider = context.read<UserProvider>();
+    final isGameOver = room.status == RoomStatus.finished;
     final players = room.players.values.where((p) {
       if (p.id == provider.currentPlayerId) {
         // Il guardiano può proteggere se stesso
@@ -569,56 +614,48 @@ class _GameScreenState extends State<GameScreen> {
               return GestureDetector(
                 onTap: () {
                   if (!me.isAlive) return;
-                  // Blocca la selezione se ha già agito di notte
                   if (theme.isNight && me.votedFor != null) return;
-                  
-                  if (theme.isNight) {
-                    if (me.role == PlayerRole.lupo) {
-                    } else if (me.role == PlayerRole.guardiano) {
-                      if (p.id == me.lastActionTargetId) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(userProvider.t('err_guardian_twice'))),
-                        );
-                        return;
-                      }
-                    } else if (me.role == PlayerRole.veggente) {
-                        // Seer logic moved to Confirm button
-                    } else if (me.role == PlayerRole.strega) {
-                      if (me.hasUsedPotion) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(userProvider.t('err_potion_used'))),
-                        );
-                        return;
-                      }
-                      if (p.isAlive) {
-                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(userProvider.t('err_resurrect_alive'))),
-                        );
-                        return;
-                      }
-                    } else if (me.role == PlayerRole.cacciatore) {
-                      if (me.hasUsedBullet) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(userProvider.t('err_bullet_used'))),
-                        );
-                        return;
-                      }
-                    } else if (me.role == PlayerRole.medium) {
-                      if (p.isAlive) {
-                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(userProvider.t('err_medium_dead_only'))),
-                        );
-                        return;
-                      }
-                    } else {
-                      return; 
+
+                  bool canSelect = false;
+                  if (!theme.isNight) {
+                    // Giorno: non puoi votare te stesso
+                    canSelect = p.id != me.id && p.isAlive;
+                  } else {
+                    // Notte: logica per ruolo
+                    switch (me.role) {
+                      case PlayerRole.lupo:
+                        canSelect = p.isAlive;
+                        break;
+                      case PlayerRole.guardiano:
+                        canSelect = p.id != me.lastActionTargetId && p.isAlive;
+                        break;
+                      case PlayerRole.veggente:
+                        canSelect = p.id != me.id && p.isAlive;
+                        break;
+                      case PlayerRole.strega:
+                        canSelect = !p.isAlive && !me.hasUsedPotion;
+                        break;
+                      case PlayerRole.cacciatore:
+                        canSelect = p.isAlive && !me.hasUsedBullet;
+                        break;
+                      case PlayerRole.medium:
+                        canSelect = !p.isAlive;
+                        break;
+                      case PlayerRole.mitomane:
+                        canSelect = p.id != me.id && p.isAlive;
+                        break;
+                      default:
+                        canSelect = false;
                     }
                   }
-                  if (!theme.isNight && p.id == me.id) return; 
-                  if (!theme.isNight && !p.isAlive) return;
-                  if (theme.isNight && me.role != PlayerRole.strega && me.role != PlayerRole.medium && !p.isAlive) return;
 
-                  setState(() => _selectedTargetId = isSelected ? null : p.id);
+                  if (canSelect) {
+                    setState(() => _selectedTargetId = isSelected ? null : p.id);
+                  } else if (theme.isNight && me.role == PlayerRole.strega && me.hasUsedPotion == true) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(userProvider.t('err_potion_used'))),
+                    );
+                  }
                 },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -639,18 +676,30 @@ class _GameScreenState extends State<GameScreen> {
                       if (p.avatarUrl != null)
                         CircleAvatar(backgroundImage: NetworkImage(p.avatarUrl!), radius: 20),
                       const SizedBox(height: 4),
-                      Text(
-                        "${(p.id == currentPlayerId || (me.role == PlayerRole.lupo && p.role == PlayerRole.lupo)) ? (AppTranslations.roleEmojis[p.role?.name] ?? '') : ''} ${p.name}${p.id == currentPlayerId ? " (${userProvider.t('you_suffix')})" : ""}",
-                        style: TextStyle(
-                          color: p.isAlive ? theme.text : Colors.grey,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          decoration: p.isAlive ? null : TextDecoration.lineThrough,
-                        ),
-                        textAlign: TextAlign.center,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (p.isAlive && ((!theme.isNight) || (theme.isNight && (me.role == PlayerRole.lupo || me.role == PlayerRole.guardiano || me.role == PlayerRole.veggente || me.role == PlayerRole.cacciatore))))
+                      p.role == PlayerRole.jolly && isGameOver
+                        ? ShaderMask(
+                            shaderCallback: (bounds) => const LinearGradient(
+                              colors: [Colors.red, Colors.orange, Colors.yellow, Colors.green, Colors.blue, Colors.indigo, Colors.purple],
+                            ).createShader(bounds),
+                            child: Text(
+                              "${AppTranslations.roleEmojis[p.role?.name] ?? ''} ${p.name}${p.id == currentPlayerId ? " (${userProvider.t('you_suffix')})" : ""}",
+                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          )
+                        : Text(
+                            "${(p.id == currentPlayerId || isGameOver || ((me.role == PlayerRole.lupo) && (p.role == PlayerRole.lupo))) ? (AppTranslations.roleEmojis[p.role?.name] ?? '') : ''} ${p.name}${p.id == currentPlayerId ? " (${userProvider.t('you_suffix')})" : ""}",
+                            style: TextStyle(
+                              color: p.isAlive ? theme.text : Colors.grey,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              decoration: p.isAlive ? null : TextDecoration.lineThrough,
+                            ),
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      if (p.isAlive && ((!theme.isNight) || (theme.isNight && (me.role == PlayerRole.lupo || me.role == PlayerRole.guardiano || me.role == PlayerRole.veggente || me.role == PlayerRole.cacciatore || me.role == PlayerRole.mitomane))))
                          Icon(Icons.touch_app, size: 12, color: theme.text.withOpacity(0.5)),
                       if (!p.isAlive && theme.isNight && me.role == PlayerRole.strega && !me.hasUsedPotion)
                          const Icon(Icons.auto_fix_high, size: 12, color: Colors.purpleAccent),
@@ -788,32 +837,73 @@ class _GameScreenState extends State<GameScreen> {
               controller: _messageController,
               style: TextStyle(color: theme.text),
               decoration: InputDecoration(
-                hintText: theme.isNight ? (me.role == PlayerRole.lupo ? userProvider.t('chat_wolf') : userProvider.t('chat_massoni')) : userProvider.t('chat_village'),
+                hintText: theme.isNight ? ((me.role == PlayerRole.lupo) ? userProvider.t('chat_wolf') : userProvider.t('chat_massoni')) : userProvider.t('chat_village'),
                 hintStyle: TextStyle(color: theme.text.withOpacity(0.5)),
                 border: InputBorder.none,
                 filled: true,
                 fillColor: theme.bg.withOpacity(0.5),
               ),
-              onSubmitted: (val) => _sendMessage(provider, me, theme.isNight),
+              onSubmitted: (val) => _sendMessage(provider, me, room),
             ),
           ),
           IconButton(
             icon: Icon(Icons.send, color: theme.accent),
-            onPressed: () => _sendMessage(provider, me, theme.isNight),
+            onPressed: () => _sendMessage(provider, me, room),
           ),
         ],
       ),
     );
   }
 
-  void _sendMessage(GameProvider provider, Player me, bool isNight) {
+  void _sendMessage(GameProvider provider, Player me, Room room) {
     if (_messageController.text.trim().isEmpty) return;
     provider.sendMessage(
       _messageController.text.trim(), 
-      isWolfOnly: isNight && me.role == PlayerRole.lupo,
-      isMassoniOnly: isNight && me.role == PlayerRole.massoni,
+      isWolfOnly: room.phase == GamePhase.notte && me.role == PlayerRole.lupo,
+      isMassoniOnly: room.phase == GamePhase.notte && me.role == PlayerRole.massoni,
     );
     _messageController.clear();
+  }
+
+  void _showMitomaneResult(BuildContext context, PlayerRole role) {
+    final userProvider = context.read<UserProvider>();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFF5E6CA),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: const Color(0xFF8B4513), width: 3)),
+        title: Text(
+          "LUPUS IN POCKET",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: const Color(0xFF8B4513), fontWeight: FontWeight.bold, fontFamily: 'Medieval'),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cached, size: 80, color: Color(0xFF8B4513)),
+            const SizedBox(height: 20),
+            Text(
+              userProvider.t('mitomane_new_role').replaceAll('{role}', userProvider.t('role_${role.name}').toUpperCase()),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18, color: Colors.black87, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          Center(
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B4513),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: Text(userProvider.t('btn_confirm'), style: const TextStyle(color: Colors.white)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildWinnerScreen(BuildContext context, Room room) {
@@ -841,14 +931,37 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            Text(
-              isLupiWin ? "I LUPI HANNO VINTO!" : "IL VILLAGGIO HA VINTO!",
-              style: TextStyle(
-                fontSize: 24, 
-                fontWeight: FontWeight.bold, 
-                color: isLupiWin ? Colors.redAccent : Colors.greenAccent,
-              ),
-            ),
+            room.winnerTeam == 'jolly'
+              ? RichText(
+                  textAlign: TextAlign.center,
+                  text: TextSpan(
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textColor, fontFamily: 'Medieval'),
+                    children: [
+                      TextSpan(text: userProvider.language == 'it' ? "IL " : "THE "),
+                      WidgetSpan(
+                        child: ShaderMask(
+                          shaderCallback: (bounds) => const LinearGradient(
+                            colors: [Colors.red, Colors.orange, Colors.yellow, Colors.green, Colors.blue, Colors.indigo, Colors.purple],
+                          ).createShader(bounds),
+                          child: Text(
+                            userProvider.language == 'it' ? "JOLLY" : "JESTER",
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Medieval'),
+                          ),
+                        ),
+                      ),
+                      TextSpan(text: userProvider.language == 'it' ? " HA INGANNATO TUTTI!\nVITTORIA SOLITARIA!" : " FOOLED EVERYONE!\nSOLITARY VICTORY!"),
+                    ],
+                  ),
+                )
+              : Text(
+                  isLupiWin ? userProvider.t('msg_lupi_win') : userProvider.t('msg_buoni_win'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 24, 
+                    fontWeight: FontWeight.bold, 
+                    color: isLupiWin ? Colors.redAccent : Colors.greenAccent,
+                  ),
+                ),
             const SizedBox(height: 40),
             if (provider.isHost) ...[
               SizedBox(
@@ -865,9 +978,7 @@ class _GameScreenState extends State<GameScreen> {
                   text: userProvider.t('back_to_home'),
                   isSecondary: true,
                   onPressed: () async {
-                    final name = userProvider.user?.name;
-                    await provider.leaveRoom(name: name);
-                    await userProvider.setLastRoomId(null);
+                    await provider.exitToHome();
                     if (context.mounted) {
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(builder: (_) => HomeScreen()),
@@ -888,30 +999,83 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  void _showExitDialog(BuildContext context, GameProvider provider) {
-    showDialog(
+  void _showExitDialog(BuildContext context, GameProvider gameProvider) async {
+    final userProvider = context.read<UserProvider>();
+    final isHost = gameProvider.isHost;
+    
+    final shouldPop = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Vuoi uscire?"),
-        content: const Text("Perderai i tuoi progressi nella partita."),
+        title: Text(userProvider.t('are_you_sure')),
+        content: Text(isHost ? userProvider.t('exit_warning_host') : userProvider.t('exit_warning_player')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULLA")),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(userProvider.t('cancel'))),
+          if (isHost)
+            TextButton(
+              onPressed: () async {
+                await gameProvider.closeRoom();
+                if (context.mounted) {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => HomeScreen()),
+                    (route) => false,
+                  );
+                }
+              },
+              child: const Text("CHIUDI STANZA", style: TextStyle(color: Colors.orange)),
+            ),
           TextButton(
-            onPressed: () async {
-              final name = context.read<UserProvider>().user?.name;
-              await provider.leaveRoom(name: name);
-              await context.read<UserProvider>().setLastRoomId(null);
-              if (context.mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => HomeScreen()),
-                  (route) => false,
-                );
-              }
-            },
-            child: const Text("ESCI", style: TextStyle(color: Colors.red)),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(userProvider.t('exit'), style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
+    );
+
+    if (shouldPop == true) {
+      await gameProvider.exitToHome();
+      if (context.mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => HomeScreen()),
+          (route) => false,
+        );
+      }
+    }
+  }
+
+  void _showRoleInfo(BuildContext context, PlayerRole role) {
+    final userProvider = context.read<UserProvider>();
+    String description = userProvider.t('info_${role.name}');
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(userProvider.t('role_${role.name}')),
+        content: Text(description),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(userProvider.t('close')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeathOverlay(Room room, GameProvider provider) {
+    if (room.deathAnnouncement == null) return const SizedBox.shrink();
+    
+    // Estraiamo la lista degli eventi (o ne creiamo una se è vecchio stile, per sicurezza)
+    final List<dynamic>? eventsRaw = room.deathAnnouncement!['events'];
+    final List<Map<String, dynamic>> events = eventsRaw != null 
+        ? eventsRaw.map((e) => Map<String, dynamic>.from(e)).toList()
+        : [Map<String, dynamic>.from(room.deathAnnouncement!)];
+
+    return DeathAnnouncementOverlay(
+      key: ValueKey(room.deathAnnouncement.hashCode), // Cambia solo quando l'intera struttura cambia
+      events: events,
+      onFinished: () async {
+        await provider.clearDeathAnnouncement();
+      },
     );
   }
 }

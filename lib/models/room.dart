@@ -47,7 +47,7 @@ class Room {
     this.discussionDuration = 180,
     this.voteDuration = 30,
     this.nightDuration = 30,
-    this.nightCount = 1,
+    this.nightCount = 0,
     this.selectedRoles = const {
       PlayerRole.lupo: 1,
       PlayerRole.contadino: 1,
@@ -95,7 +95,7 @@ class Room {
       discussionDuration: map['discussionDuration'] ?? 180,
       voteDuration: map['voteDuration'] ?? 30,
       nightDuration: map['nightDuration'] ?? 30,
-      nightCount: map['nightCount'] ?? 1,
+      nightCount: map['nightCount'] ?? 0,
       selectedRoles: roles,
       lastSystemMessage: map['lastSystemMessage'],
       deathAnnouncement: map['deathAnnouncement'] != null ? Map<String, dynamic>.from(map['deathAnnouncement'] as Map) : null,

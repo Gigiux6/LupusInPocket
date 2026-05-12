@@ -87,9 +87,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
           ),
         );
         if (shouldPop == true) {
-          final name = userProvider.user?.name;
-          await gameProvider.leaveRoom(name: name);
-          await userProvider.setLastRoomId(null);
+          await gameProvider.exitToHome();
           if (mounted) {
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (_) => HomeScreen()),
@@ -102,6 +100,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
         appBar: AppBar(
           title: Text('Stanza: ${room.id}'),
           centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
           actions: const [],
         ),
         body: SafeArea(
@@ -354,13 +356,34 @@ class _LobbyScreenState extends State<LobbyScreen> {
             onPressed: () => _showRoleInfo(context, role),
           ),
           Expanded(
-            child: Text(
-              "${AppTranslations.roleEmojis[role.name] ?? ''} ${userProvider.t('role_${role.name}')}",
-              style: TextStyle(
-                fontWeight: count > 0 ? FontWeight.bold : FontWeight.normal,
-                color: count > 0 ? Colors.black : Colors.black54,
-              ),
-            ),
+            child: (role == PlayerRole.jolly || role == PlayerRole.mitomane)
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text("${AppTranslations.roleEmojis[role.name] ?? ''} ", style: const TextStyle(fontSize: 18)),
+                    ShaderMask(
+                      shaderCallback: (bounds) => const LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [Colors.red, Colors.orange, Colors.yellow, Colors.green, Colors.blue, Colors.indigo, Colors.purple],
+                      ).createShader(bounds),
+                      child: Text(
+                        userProvider.t('role_${role.name}'),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Text(
+                  "${AppTranslations.roleEmojis[role.name] ?? ''} ${userProvider.t('role_${role.name}')}",
+                  style: TextStyle(
+                    fontWeight: count > 0 ? FontWeight.bold : FontWeight.normal,
+                    color: count > 0 ? Colors.black : Colors.black54,
+                  ),
+                ),
           ),
           if (isMulti) ...[
             if (isHost)

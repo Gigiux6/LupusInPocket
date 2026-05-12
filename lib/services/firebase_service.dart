@@ -35,6 +35,11 @@ class FirebaseService {
   }
 
   Future<bool> joinRoom(String roomId, Player player) async {
+    final roomSnapshot = await _db.child('rooms/$roomId').get();
+    if (!roomSnapshot.exists) {
+      return false; // La stanza non esiste
+    }
+
     final existingPlayer = await _db.child('rooms/$roomId/players/${player.id}').get();
     if (existingPlayer.exists) {
       // Se il giocatore esiste già e ha già un ruolo, non sovrascriviamo tutto
@@ -189,7 +194,7 @@ class FirebaseService {
       updates['hunterActionTargetId'] = null;
       updates['mediumCheckId'] = null;
       updates['mitomaneActionTargetId'] = null;
-      updates['nightCount'] = 1;
+      updates['nightCount'] = 0;
       
       await _db.child('rooms/$roomId').update(updates);
     }
