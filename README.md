@@ -10,7 +10,7 @@
 
 ## 🚀 Live Demo & Downloads
 
-* **🌐 Web Version**: Play directly in your browser at [lupus-pocket-web.app](https://lupus-pocket-web.app/)
+* **🌐 Web Version**: Play directly in your browser at [lupus-pocket-web.app](https://lupus-in-pocket.web.app)
 * **📱 Android APK**: Download the latest stable APK from the [Releases page](https://github.com/Gigiux6/LupusInFabula/releases).
 
 Lupus in Pocket is a vibrant, immersive multiplayer party game inspired by the classic "Lupus in Pocket" tabletop game. Players assume secret roles, vote, and navigate narrative phases in real time.
