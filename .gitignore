@@ -1,45 +1,104 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
+# ==========================================
+# 🔐 SICUREZZA, SEGRETI E CREDENZIALI
+# ==========================================
 
-# IntelliJ related
+# File d'ambiente e segreti locali
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+*.env
+config.json
+
+# Chiavi private, keystore e certificati
+*.keystore
+*.jks
+*.p12
+*.pem
+*.crt
+*.pub
+/android/key.properties
+/android/local.properties
+
+# Firebase configurations (Escluse per sicurezza)
+lib/firebase_options.dart
+google-services.json
+GoogleService-Info.plist
+
+# ==========================================
+# 🛠️ STRUMENTI E COMPILAZIONE FLUTTER / DART
+# ==========================================
+
+# Cartelle temporanee di compilazione (ricorsivo ed efficiente)
+**/build/
+**/.dart_tool/
+
+# Dipendenze e cache di Flutter
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/coverage/
+
+# Obfuscation & Symbolication maps
+app.*.symbols
+app.*.map.json
+
+# ==========================================
+# 🤖 ANDROID NATIVO
+# ==========================================
+
+# File locali di configurazione e Gradle
+.gradle/
+**/android/.gradle/
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+
+# ==========================================
+# 🍏 IOS / MACOS NATIVO
+# ==========================================
+
+# File temporanei di sistema
+.DS_Store
+
+# Artifact di build iOS
+**/ios/Flutter/.last_build_id
+**/ios/Flutter/GeneratedPluginRegistrant.h
+**/ios/Flutter/GeneratedPluginRegistrant.m
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/GeneratedPluginRegistrant.swift
+**/ios/Pods/
+Podfile.lock
+
+# ==========================================
+# 💻 IDE E STRUMENTI DI SVILUPPO
+# ==========================================
+
+# IntelliJ/Android Studio
+.idea/
 *.iml
 *.ipr
 *.iws
-.idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# Visual Studio Code
+.vscode/
 
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-/coverage/
+# ==========================================
+# 📦 FILE GRANDI / MULTIMEDIALI ED EXTRA
+# ==========================================
 
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+FILE\ AGGIUNTIVI/
+*.mp3
+*.wav
+*.zip
+*.exe
+.firebase/
