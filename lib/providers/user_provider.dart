@@ -2,18 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/firebase_service.dart';
+import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
 import '../models/user_model.dart';
 import '../data/translations.dart';
 
 class UserProvider with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseService _firebaseService = FirebaseService();
+  final AuthService _authService = AuthService();
+  final FirestoreService _firestoreService = FirestoreService();
   
   UserModel? _user;
   UserModel? get user => _user;
   
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
+  bool get isAnonymous => _authService.isAnonymous;
 
   static const String _nameKey = 'user_name';
   static const String _avatarKey = 'user_avatar';
@@ -26,7 +31,7 @@ class UserProvider with ChangeNotifier {
   bool _isDarkMode = true;
   bool get isDarkMode => _isDarkMode;
   
-  double _musicVolume = 0.5;
+  double _musicVolume = 0.3;
   double get musicVolume => _musicVolume;
   
   double _effectsVolume = 1.0;
@@ -44,7 +49,7 @@ class UserProvider with ChangeNotifier {
     try {
       debugPrint('1. Cerco SharedPreferences...');
       final prefs = await SharedPreferences.getInstance();
-      _musicVolume = prefs.getDouble(_musicVolumeKey) ?? 0.5;
+      _musicVolume = prefs.getDouble(_musicVolumeKey) ?? 0.3;
       _effectsVolume = prefs.getDouble(_effectsVolumeKey) ?? 1.0;
       _language = prefs.getString(_languageKey) ?? 'it';
       _isDarkMode = prefs.getBool(_darkModeKey) ?? true;
@@ -76,13 +81,12 @@ class UserProvider with ChangeNotifier {
       }
 
       if (firebaseUser != null && savedName != null) {
-        debugPrint('6. Sincronizzo profilo Firebase (timeout 5s)...');
+        debugPrint('6. Sincronizzo profilo Firebase Firestore (timeout 5s)...');
         try {
           await _syncProfile(firebaseUser.uid, savedName, savedAvatar).timeout(
             const Duration(seconds: 5),
             onTimeout: () {
               debugPrint('TIMEOUT: Sincronizzazione profilo non risponde.');
-              // Carico profilo locale per non bloccare
               _loadLocalFallback(firebaseUser!.uid, savedName, savedAvatar);
             },
           );
@@ -110,20 +114,46 @@ class UserProvider with ChangeNotifier {
       uid: uid,
       name: name,
       avatarUrl: avatar ?? _getDefaultAvatar(name),
+      email: '',
     );
   }
 
   Future<void> _syncProfile(String uid, String name, String? avatar) async {
-    final profile = await _firebaseService.getUserProfile(uid);
-    if (profile != null) {
-      _user = UserModel.fromMap(uid, profile);
-    } else {
-      _user = UserModel(
-        uid: uid,
-        name: name,
-        avatarUrl: avatar ?? _getDefaultAvatar(name),
-      );
-      await _firebaseService.updateUserProfile(uid, _user!.toMap());
+    try {
+      final profile = await _firestoreService.getUserProfile(uid);
+      final firebaseUser = _auth.currentUser;
+      final String email = firebaseUser?.email ?? '';
+
+      if (profile != null) {
+        _user = UserModel.fromMap(uid, profile);
+        // Se l'email dell'utente autenticato differisce da quella registrata nel profilo Firestore (es. post-linking)
+        if (_user!.email != email) {
+          _user = _user!.copyWith(email: email);
+          await _firestoreService.updateUserProfile(uid, {'email': email});
+        }
+      } else {
+        _user = UserModel(
+          uid: uid,
+          name: name,
+          avatarUrl: avatar ?? _getDefaultAvatar(name),
+          email: email,
+        );
+        await _firestoreService.createUserProfile(
+          uid: uid,
+          username: _user!.name,
+          email: email,
+          photoUrl: _user!.avatarUrl,
+        );
+      }
+      
+      // Sincronizza anche localmente su SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_nameKey, _user!.name);
+      await prefs.setString(_avatarKey, _user!.avatarUrl);
+      
+    } catch (e) {
+      debugPrint('Errore in _syncProfile: $e. Uso fallback locale.');
+      _loadLocalFallback(uid, name, avatar);
     }
     notifyListeners();
   }
@@ -153,13 +183,19 @@ class UserProvider with ChangeNotifier {
       uid: uid,
       name: name,
       avatarUrl: avatar,
+      email: _auth.currentUser?.email ?? '',
     );
     
     try {
-      await _firebaseService.updateUserProfile(uid, _user!.toMap());
+      await _firestoreService.createUserProfile(
+        uid: uid,
+        username: name,
+        email: _user!.email,
+        photoUrl: avatar,
+      );
       await _auth.currentUser?.updateDisplayName(name);
     } catch (e) {
-      debugPrint('Firebase profile update failed: $e');
+      debugPrint('Firebase profile setup on Firestore failed: $e');
     }
     
     notifyListeners();
@@ -177,10 +213,10 @@ class UserProvider with ChangeNotifier {
     _user = _user!.copyWith(name: name);
     
     try {
-      await _firebaseService.updateUserProfile(_user!.uid, {'name': name});
+      await _firestoreService.updateUserProfile(_user!.uid, {'username': name});
       await _auth.currentUser?.updateDisplayName(name);
     } catch (e) {
-      debugPrint('Firebase updateName failed: $e');
+      debugPrint('Firestore updateName failed: $e');
     }
     
     notifyListeners();
@@ -195,9 +231,9 @@ class UserProvider with ChangeNotifier {
     _user = _user!.copyWith(avatarUrl: avatarUrl);
     
     try {
-      await _firebaseService.updateUserProfile(_user!.uid, {'avatarUrl': avatarUrl});
+      await _firestoreService.updateUserProfile(_user!.uid, {'photoUrl': avatarUrl});
     } catch (e) {
-      debugPrint('Firebase updateAvatar failed: $e');
+      debugPrint('Firestore updateAvatar failed: $e');
     }
     
     notifyListeners();
@@ -206,12 +242,25 @@ class UserProvider with ChangeNotifier {
   Future<void> incrementWins() async {
     if (_user == null) return;
     
-    await _firebaseService.incrementGamesWon(_user!.uid);
-    final profile = await _firebaseService.getUserProfile(_user!.uid);
-    if (profile != null) {
-      _user = UserModel.fromMap(_user!.uid, profile);
-      notifyListeners();
+    try {
+      // Manteniamo aggiornato anche il Realtime DB per compatibilità con il gameplay esistente
+      await _firebaseService.incrementGamesWon(_user!.uid);
+    } catch (e) {
+      debugPrint('Realtime DB incrementGamesWon fallito: $e');
     }
+
+    try {
+      // Aggiorniamo Firestore per la nuova struttura profili
+      await _firestoreService.incrementGamesWon(_user!.uid);
+      final profile = await _firestoreService.getUserProfile(_user!.uid);
+      if (profile != null) {
+        _user = UserModel.fromMap(_user!.uid, profile);
+      }
+    } catch (e) {
+      debugPrint('Firestore incrementGamesWon fallito: $e');
+    }
+    
+    notifyListeners();
   }
 
   Future<void> updateMusicVolume(double value) async {
@@ -259,5 +308,90 @@ class UserProvider with ChangeNotifier {
 
   String t(String key, {Map<String, String>? args}) {
     return AppTranslations.translate(key, _language, args: args);
+  }
+
+  void resetInitializationFlag() {
+    _isInitialized = false;
+    notifyListeners();
+  }
+
+  Future<bool> linkAccountWithGoogle() async {
+    try {
+      final user = await _authService.linkWithGoogle();
+      if (user != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final existingName = _user?.name;
+        final name = (existingName != null && existingName.isNotEmpty && existingName != 'Giocatore')
+            ? existingName
+            : (user.displayName ?? 'Giocatore');
+        final photo = user.photoURL ?? _user?.avatarUrl ?? _getDefaultAvatar(name);
+        await prefs.setString(_nameKey, name);
+        await prefs.setString(_avatarKey, photo);
+        await _syncProfile(user.uid, name, photo);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Errore durante linkAccountWithGoogle: $e');
+      rethrow;
+    }
+  }
+
+  Future<bool> linkAccountWithCredential(AuthCredential credential) async {
+    try {
+      final user = await _authService.linkWithProviderCredential(credential);
+      if (user != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final existingName = _user?.name;
+        final name = (existingName != null && existingName.isNotEmpty && existingName != 'Giocatore')
+            ? existingName
+            : (user.displayName ?? 'Giocatore');
+        final photo = user.photoURL ?? _user?.avatarUrl ?? _getDefaultAvatar(name);
+        await prefs.setString(_nameKey, name);
+        await prefs.setString(_avatarKey, photo);
+        await _syncProfile(user.uid, name, photo);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Errore durante linkAccountWithCredential: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> signInWithGoogle() async {
+    try {
+      final user = await _authService.signInWithGoogle();
+      if (user != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final existingName = _user?.name;
+        final name = (existingName != null && existingName.isNotEmpty && existingName != 'Giocatore')
+            ? existingName
+            : (user.displayName ?? 'Giocatore');
+        final photo = user.photoURL ?? _getDefaultAvatar(name);
+        await prefs.setString(_nameKey, name);
+        await prefs.setString(_avatarKey, photo);
+        resetInitializationFlag();
+        await init();
+      }
+    } catch (e) {
+      debugPrint('Errore in signInWithGoogle: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> signOut() async {
+    try {
+      await _authService.signOut();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_nameKey);
+      await prefs.remove(_avatarKey);
+      _user = null;
+      resetInitializationFlag();
+      await init();
+    } catch (e) {
+      debugPrint('Errore in signOut: $e');
+      rethrow;
+    }
   }
 }

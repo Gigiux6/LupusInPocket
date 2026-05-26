@@ -32,6 +32,8 @@ class FirebaseService {
 
   Future<void> createRoom(Room room) async {
     await _db.child('rooms/${room.id}').set(room.toMap());
+    // Regola di disconnessione per l'Host: elimina l'intera stanza
+    await _db.child('rooms/${room.id}').onDisconnect().remove();
   }
 
   Future<bool> joinRoom(String roomId, Player player) async {
@@ -52,6 +54,9 @@ class FirebaseService {
 
     await _db.child('rooms/$roomId/players/${player.id}').set(player.toMap());
     
+    // Regola di disconnessione per il Giocatore: si rimuove automaticamente dalla stanza
+    await _db.child('rooms/$roomId/players/${player.id}').onDisconnect().remove();
+
     final snapshot = await _db.child('rooms/$roomId/turnOrder').get();
     List<String> turnOrder = [];
     if (snapshot.value != null) {
@@ -62,6 +67,18 @@ class FirebaseService {
       await _db.child('rooms/$roomId/turnOrder').set(turnOrder);
     }
     return true;
+  }
+
+  Future<void> updateTurnOrder(String roomId, List<String> turnOrder) async {
+    await _db.child('rooms/$roomId/turnOrder').set(turnOrder);
+  }
+
+  Future<void> cancelPlayerOnDisconnect(String roomId, String playerId) async {
+    await _db.child('rooms/$roomId/players/$playerId').onDisconnect().cancel();
+  }
+
+  Future<void> cancelRoomOnDisconnect(String roomId) async {
+    await _db.child('rooms/$roomId').onDisconnect().cancel();
   }
 
   Future<void> updateRoomStatus(String roomId, RoomStatus status) async {

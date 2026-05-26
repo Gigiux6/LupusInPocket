@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../providers/user_provider.dart';
 import '../providers/game_provider.dart';
 import '../widgets/custom_button.dart';
 import '../theme/app_theme.dart';
+import '../services/profile_storage_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -15,6 +22,9 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _nameController;
   String? _selectedAvatar;
+  bool _isUploading = false;
+  bool _isLinking = false;
+  final ProfileStorageService _profileStorageService = ProfileStorageService();
   
   // Medieval/Adventurer style avatars
   final List<String> _avatars = [
@@ -49,6 +59,729 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
+  Future<void> _pickAndUploadImage() async {
+    final userProvider = context.read<UserProvider>();
+    final userId = userProvider.user?.uid;
+    if (userId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userProvider.t('user_not_authenticated'))),
+        );
+      }
+      return;
+    }
+
+    try {
+      final XFile? image = await _profileStorageService.pickImageFromGallery();
+      if (image == null) return;
+
+      if (!mounted) return;
+      final CroppedFile? croppedFile = await _profileStorageService.cropImage(image, context);
+      if (croppedFile == null) return;
+
+      setState(() {
+        _isUploading = true;
+      });
+
+      final String downloadUrl = await _profileStorageService.uploadProfileImage(croppedFile, userId);
+
+      await userProvider.updateAvatar(downloadUrl);
+
+      if (mounted) {
+        setState(() {
+          _selectedAvatar = downloadUrl;
+          _isUploading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userProvider.t('photo_updated'))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userProvider.t('upload_error', args: {'error': e.toString()}))),
+        );
+      }
+    }
+  }
+
+  void _signInGoogleAccount() async {
+    final userProvider = context.read<UserProvider>();
+    setState(() {
+      _isLinking = true;
+    });
+    try {
+      await userProvider.signInWithGoogle();
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userProvider.t('sign_in_success'))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        final String errorMessage = e.toString();
+        if (errorMessage.contains('popup-closed-by-user') ||
+            errorMessage.contains('canceled') ||
+            errorMessage.contains('cancelled') ||
+            errorMessage.contains('user-cancelled')) {
+          return;
+        }
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(userProvider.t('auth_error'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            content: Text(errorMessage),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  void _linkGoogleAccount() async {
+    final userProvider = context.read<UserProvider>();
+    setState(() {
+      _isLinking = true;
+    });
+    try {
+      if (FirebaseAuth.instance.currentUser == null) {
+        await FirebaseAuth.instance.signInAnonymously();
+      }
+      final success = await userProvider.linkAccountWithGoogle();
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(userProvider.t('link_success'))),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        
+        final String errorMessage = e.toString();
+        if (errorMessage.contains('popup-closed-by-user') ||
+            errorMessage.contains('canceled') ||
+            errorMessage.contains('cancelled') ||
+            errorMessage.contains('user-cancelled')) {
+          return;
+        }
+        if (errorMessage.contains('già associato') ||
+            errorMessage.contains('già in uso') ||
+            errorMessage.contains('already-in-use') ||
+            errorMessage.contains('already in use') ||
+            errorMessage.contains('credential-already-in-use') ||
+            errorMessage.contains('email-already-in-use')) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(userProvider.t('account_in_use_title'), style: const TextStyle(fontWeight: FontWeight.bold)),
+              content: Text(
+                userProvider.t('account_in_use_message'),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(userProvider.t('cancel'), style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _signInGoogleAccount();
+                  },
+                  child: Text(userProvider.t('sign_in'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        } else {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(userProvider.t('auth_error'), style: const TextStyle(fontWeight: FontWeight.bold)),
+              content: Text(errorMessage),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  void _linkWithCredentials(AuthCredential credential) async {
+    final userProvider = context.read<UserProvider>();
+    setState(() {
+      _isLinking = true;
+    });
+    try {
+      if (FirebaseAuth.instance.currentUser == null) {
+        await FirebaseAuth.instance.signInAnonymously();
+      }
+      await userProvider.linkAccountWithCredential(credential);
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userProvider.t('link_success'))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        
+        final String errorMessage = e.toString();
+        if (errorMessage.contains('già associato') ||
+            errorMessage.contains('già in uso') ||
+            errorMessage.contains('already-in-use') ||
+            errorMessage.contains('already in use') ||
+            errorMessage.contains('credential-already-in-use') ||
+            errorMessage.contains('email-already-in-use')) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(userProvider.t('account_in_use_title'), style: const TextStyle(fontWeight: FontWeight.bold)),
+              content: Text(
+                userProvider.t('account_in_use_message'),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(userProvider.t('cancel'), style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _signInWithCredential(credential);
+                  },
+                  child: Text(userProvider.t('sign_in'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        } else {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(userProvider.t('auth_error'), style: const TextStyle(fontWeight: FontWeight.bold)),
+              content: Text(errorMessage),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  void _signInWithCredential(AuthCredential credential) async {
+    final userProvider = context.read<UserProvider>();
+    setState(() {
+      _isLinking = true;
+    });
+    try {
+      final user = await FirebaseAuth.instance.signInWithCredential(credential);
+      if (user.user != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final existingName = userProvider.user?.name;
+        final name = (existingName != null && existingName.isNotEmpty && existingName != 'Giocatore')
+            ? existingName
+            : (user.user!.displayName ?? 'Giocatore');
+        final photo = user.user!.photoURL ?? 'https://api.dicebear.com/7.x/adventurer/png?seed=Knight';
+        await prefs.setString('user_name', name);
+        await prefs.setString('user_avatar', photo);
+        userProvider.resetInitializationFlag();
+        await userProvider.init();
+      }
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userProvider.t('sign_in_success'))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(userProvider.t('auth_error'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            content: Text(e.toString()),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  void _showEmailAuthDialog() {
+    final emailController = TextEditingController();
+    final passwordController = TextEditingController();
+    final userProvider = context.read<UserProvider>();
+
+    String? emailError;
+    String? passwordError;
+    bool isRegisterMode = false;
+    bool obscurePassword = true;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return Dialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 24.0),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: const BorderSide(color: AppTheme.goldBorder, width: 3),
+              ),
+              backgroundColor: AppTheme.dayBg,
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            isRegisterMode ? userProvider.t('register_email') : userProvider.t('sign_in_email'),
+                            style: GoogleFonts.medievalSharp(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.dayText,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: AppTheme.dayText, size: 24),
+                            onPressed: () => Navigator.pop(dialogContext),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        style: const TextStyle(color: AppTheme.dayText, fontWeight: FontWeight.bold),
+                        onChanged: (_) {
+                          if (emailError != null) {
+                            setStateDialog(() {
+                              emailError = null;
+                            });
+                          }
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          hintText: userProvider.t('email_hint'),
+                          errorText: emailError,
+                          prefixIcon: const Icon(Icons.email, color: AppTheme.dayText),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: passwordController,
+                        obscureText: obscurePassword,
+                        style: const TextStyle(color: AppTheme.dayText, fontWeight: FontWeight.bold),
+                        onChanged: (_) {
+                          if (passwordError != null) {
+                            setStateDialog(() {
+                              passwordError = null;
+                            });
+                          }
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          hintText: userProvider.t('password_hint'),
+                          errorText: passwordError,
+                          prefixIcon: const Icon(Icons.lock, color: AppTheme.dayText),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscurePassword ? Icons.visibility : Icons.visibility_off,
+                              color: AppTheme.dayText,
+                            ),
+                            onPressed: () {
+                              setStateDialog(() {
+                                obscurePassword = !obscurePassword;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      CustomButton(
+                        text: isRegisterMode ? userProvider.t('register') : userProvider.t('sign_in'),
+                        color: AppTheme.leatherBrown,
+                        onPressed: () {
+                          final email = emailController.text.trim();
+                          final password = passwordController.text;
+                          
+                          final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                          
+                          bool hasError = false;
+                          String? tempEmailError;
+                          String? tempPasswordError;
+                          
+                          if (email.isEmpty || !emailRegex.hasMatch(email)) {
+                            tempEmailError = userProvider.t('invalid_email');
+                            hasError = true;
+                          }
+                          
+                          final hasUppercase = password.contains(RegExp(r'[A-Z]'));
+                          final hasDigits = password.contains(RegExp(r'[0-9]'));
+                          if (password.length < 8 || !hasUppercase || !hasDigits) {
+                            tempPasswordError = userProvider.t('invalid_password');
+                            hasError = true;
+                          }
+                          
+                          if (hasError) {
+                            setStateDialog(() {
+                              emailError = tempEmailError;
+                              passwordError = tempPasswordError;
+                            });
+                            return;
+                          }
+                          
+                          Navigator.pop(dialogContext);
+                          if (isRegisterMode) {
+                            _linkEmailAccount(email, password);
+                          } else {
+                            _signInEmailAccount(email, password);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: () {
+                          setStateDialog(() {
+                            isRegisterMode = !isRegisterMode;
+                            emailError = null;
+                            passwordError = null;
+                          });
+                        },
+                        child: Text(
+                          isRegisterMode ? userProvider.t('have_account_hint') : userProvider.t('no_account_hint'),
+                          style: const TextStyle(
+                            color: AppTheme.dayText,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            decoration: TextDecoration.underline,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+        );
+      },
+    );
+  }
+
+  void _linkEmailAccount(String email, String password) async {
+    final userProvider = context.read<UserProvider>();
+    setState(() {
+      _isLinking = true;
+    });
+    try {
+      if (FirebaseAuth.instance.currentUser == null) {
+        await FirebaseAuth.instance.signInAnonymously();
+      }
+      
+      final AuthCredential credential = EmailAuthProvider.credential(
+        email: email,
+        password: password,
+      );
+      
+      await userProvider.linkAccountWithCredential(credential);
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userProvider.t('link_success'))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        
+        final String errorMessage = e.toString();
+        if (errorMessage.contains('già associato') ||
+            errorMessage.contains('già in uso') ||
+            errorMessage.contains('already-in-use') ||
+            errorMessage.contains('already in use') ||
+            errorMessage.contains('credential-already-in-use') ||
+            errorMessage.contains('email-already-in-use')) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(userProvider.t('account_in_use_title'), style: const TextStyle(fontWeight: FontWeight.bold)),
+              content: Text(
+                userProvider.t('account_in_use_message'),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(userProvider.t('cancel'), style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _signInEmailAccount(email, password);
+                  },
+                  child: Text(userProvider.t('sign_in'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        } else {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(userProvider.t('auth_error'), style: const TextStyle(fontWeight: FontWeight.bold)),
+              content: Text(_getFriendlyErrorMessage(e, userProvider)),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  void _signInEmailAccount(String email, String password) async {
+    final userProvider = context.read<UserProvider>();
+    setState(() {
+      _isLinking = true;
+    });
+    try {
+      final credential = EmailAuthProvider.credential(email: email, password: password);
+      final user = await FirebaseAuth.instance.signInWithCredential(credential);
+      if (user.user != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final existingName = userProvider.user?.name;
+        final name = (existingName != null && existingName.isNotEmpty && existingName != 'Giocatore')
+            ? existingName
+            : (user.user!.displayName ?? 'Giocatore');
+        final photo = user.user!.photoURL ?? 'https://api.dicebear.com/7.x/adventurer/png?seed=Knight';
+        await prefs.setString('user_name', name);
+        await prefs.setString('user_avatar', photo);
+        userProvider.resetInitializationFlag();
+        await userProvider.init();
+      }
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userProvider.t('sign_in_success'))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(userProvider.t('auth_error'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            content: Text(_getFriendlyErrorMessage(e, userProvider)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  void _signOut() async {
+    final userProvider = context.read<UserProvider>();
+    setState(() {
+      _isLinking = true;
+    });
+    try {
+      await userProvider.signOut();
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userProvider.t('logout_success'))),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLinking = false;
+        });
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(userProvider.t('auth_error'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            content: Text(e.toString()),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  void _showAuthDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        final userProvider = Provider.of<UserProvider>(dialogContext, listen: false);
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 24.0),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: const BorderSide(color: AppTheme.goldBorder, width: 3),
+          ),
+          backgroundColor: AppTheme.dayBg,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        userProvider.t('unlock_photo'),
+                        style: GoogleFonts.medievalSharp(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.dayText,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: AppTheme.dayText, size: 24),
+                        onPressed: () => Navigator.pop(dialogContext),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    userProvider.t('sign_in_description'),
+                    style: const TextStyle(fontSize: 14, color: AppTheme.dayText),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  CustomButton(
+                    text: userProvider.t('sign_in_google'),
+                    color: Colors.orangeAccent,
+                    onPressed: () {
+                      Navigator.pop(dialogContext);
+                      _linkGoogleAccount();
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  CustomButton(
+                    text: userProvider.t('sign_in_apple'),
+                    color: Colors.grey[800]!,
+                    onPressed: () {
+                      Navigator.pop(dialogContext);
+                      final OAuthProvider provider = OAuthProvider('apple.com');
+                      final AuthCredential credential = provider.credential(
+                        idToken: 'apple_mock_id_token',
+                        accessToken: 'apple_mock_access_token',
+                      );
+                      _linkWithCredentials(credential);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  CustomButton(
+                    text: userProvider.t('sign_in_facebook'),
+                    color: const Color(0xFF1877F2),
+                    onPressed: () {
+                      Navigator.pop(dialogContext);
+                      final AuthCredential credential = FacebookAuthProvider.credential('facebook_mock_token');
+                      _linkWithCredentials(credential);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  CustomButton(
+                    text: userProvider.t('sign_in_email'),
+                    color: AppTheme.leatherBrown,
+                    onPressed: () {
+                      Navigator.pop(dialogContext);
+                      _showEmailAuthDialog();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _save() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
@@ -69,6 +802,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  String _getFriendlyErrorMessage(dynamic e, UserProvider userProvider) {
+    if (e is FirebaseAuthException) {
+      switch (e.code) {
+        case 'invalid-credential':
+        case 'wrong-password':
+        case 'user-not-found':
+          return userProvider.t('invalid_credentials');
+        case 'email-already-in-use':
+          return userProvider.t('email_already_in_use');
+        case 'weak-password':
+          return userProvider.t('invalid_password');
+        case 'invalid-email':
+          return userProvider.t('invalid_email');
+        default:
+          return e.message ?? e.toString();
+      }
+    }
+    final String errStr = e.toString();
+    if (errStr.contains('invalid-credential') ||
+        errStr.contains('wrong-password') ||
+        errStr.contains('user-not-found')) {
+      return userProvider.t('invalid_credentials');
+    }
+    if (errStr.contains('email-already-in-use')) {
+      return userProvider.t('email_already_in_use');
+    }
+    return errStr;
+  }
+
   @override
   Widget build(BuildContext context) {
     final userProvider = context.watch<UserProvider>();
@@ -85,6 +847,98 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Avatar attuale con pulsante di sblocco/modifica in stile medievale
+            Center(
+              child: GestureDetector(
+                onTap: () {
+                  if (userProvider.isAnonymous) {
+                    _showAuthDialog();
+                  } else {
+                    _pickAndUploadImage();
+                  }
+                },
+                child: Stack(
+                  children: [
+                    Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: AppTheme.daySurface,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppTheme.goldBorder, width: 3),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black54,
+                            offset: Offset(4, 4),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: _isUploading
+                          ? const Center(child: CircularProgressIndicator())
+                          : ClipOval(
+                              child: _selectedAvatar != null && _selectedAvatar!.isNotEmpty
+                                  ? CachedNetworkImage(
+                                      imageUrl: _selectedAvatar!,
+                                      fit: BoxFit.cover,
+                                      placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                                      errorWidget: (context, url, error) => const Center(
+                                        child: Icon(Icons.person, size: 60, color: AppTheme.leatherBrown),
+                                      ),
+                                    )
+                                  : const Center(
+                                      child: Icon(Icons.person, size: 60, color: AppTheme.leatherBrown),
+                                    ),
+                            ),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: userProvider.isAnonymous ? Colors.orangeAccent : AppTheme.leatherBrown,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppTheme.goldBorder, width: 2),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black38,
+                              offset: Offset(2, 2),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          userProvider.isAnonymous ? Icons.lock : Icons.camera_alt,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: _isLinking
+                  ? const CircularProgressIndicator()
+                  : SizedBox(
+                      width: 250,
+                      child: userProvider.isAnonymous
+                          ? CustomButton(
+                              text: userProvider.t('sign_in'),
+                              color: Colors.orangeAccent,
+                              onPressed: _showAuthDialog,
+                            )
+                          : CustomButton(
+                              text: userProvider.t('logout'),
+                              color: Colors.redAccent,
+                              onPressed: _signOut,
+                            ),
+                    ),
+            ),
+            const SizedBox(height: 30),
             _buildMedievalCard(
               color: leather,
               child: Column(
@@ -97,8 +951,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   const SizedBox(height: 10),
                   TextField(
                     controller: _nameController,
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.face),
+                      filled: true,
+                      fillColor: Colors.white,
                     ),
                   ),
                 ],
@@ -144,10 +1001,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           child: Center(
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(4),
-                              child: Image.network(
-                                avatar,
+                              child: CachedNetworkImage(
+                                imageUrl: avatar,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(Icons.person),
+                                placeholder: (context, url) => const CircularProgressIndicator(),
+                                errorWidget: (context, url, error) => const Icon(Icons.person),
                               ),
                             ),
                           ),

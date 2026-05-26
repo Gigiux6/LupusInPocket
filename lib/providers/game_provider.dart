@@ -59,8 +59,22 @@ class GameProvider with ChangeNotifier {
           notifyListeners();
         }
       } else {
-        bool phaseChanged = currentRoom?.phase != room.phase;
+        final previousRoom = currentRoom;
         currentRoom = room;
+
+        // Se siamo l'host, controlliamo se ci sono discrepanze tra turnOrder e players (disconnessioni)
+        if (isHost) {
+          final missingPlayerIds = room.turnOrder.where((id) => !room.players.containsKey(id)).toList();
+          if (missingPlayerIds.isNotEmpty) {
+            final newTurnOrder = room.turnOrder.where((id) => room.players.containsKey(id)).toList();
+            _firebaseService.updateTurnOrder(room.id, newTurnOrder);
+            for (var pid in missingPlayerIds) {
+              sendSystemMessage("Un giocatore si è disconnesso ed è uscito dalla stanza.");
+            }
+          }
+        }
+
+        bool phaseChanged = previousRoom?.phase != room.phase;
         if (phaseChanged) {
           _isProcessingPhaseEnd = false;
           _startLocalTimer();
@@ -507,6 +521,7 @@ class GameProvider with ChangeNotifier {
     }
     
     if (!isHost) {
+      await _firebaseService.cancelPlayerOnDisconnect(roomId, currentPlayerId!);
       await _firebaseService.removePlayer(roomId, currentPlayerId!);
     }
     
@@ -526,6 +541,7 @@ class GameProvider with ChangeNotifier {
   /// Chiude definitivamente la stanza (solo per l'host)
   Future<void> closeRoom() async {
     if (currentRoom == null || !isHost) return;
+    await _firebaseService.cancelRoomOnDisconnect(currentRoom!.id);
     await _firebaseService.deleteRoom(currentRoom!.id);
     await exitToHome();
   }
