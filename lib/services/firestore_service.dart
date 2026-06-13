@@ -75,4 +75,15 @@ class FirestoreService {
       rethrow;
     }
   }
+
+  /// Elimina il profilo utente da Firestore.
+  Future<void> deleteUserProfile(String uid) async {
+    try {
+      await _firestore.collection('users').doc(uid).delete();
+      debugPrint('Firestore: Profilo eliminato con successo per uid: $uid');
+    } catch (e) {
+      debugPrint('Firestore: Errore nell\'eliminazione del profilo: $e');
+      rethrow;
+    }
+  }
 }

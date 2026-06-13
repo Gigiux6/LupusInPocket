@@ -838,6 +838,122 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return errStr;
   }
 
+  void _deleteAccountDialog(UserProvider userProvider) async {
+    final bool confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(userProvider.t('delete_account')),
+          content: Text(userProvider.t('delete_account_confirm')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(userProvider.t('cancel')),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(userProvider.t('delete_account'), style: const TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    ) ?? false;
+
+    if (!confirm || !mounted) return;
+
+    if (userProvider.isAnonymous) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+      try {
+        await userProvider.deleteAccount(null);
+        if (mounted) {
+          Navigator.pop(context); // close loader
+          Navigator.pop(context); // go back
+        }
+      } catch (e) {
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userProvider.t('delete_error') + ': $e')));
+        }
+      }
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final hasGoogle = user.providerData.any((p) => p.providerId == 'google.com');
+    final hasPassword = user.providerData.any((p) => p.providerId == 'password');
+
+    dynamic credential;
+
+    if (hasPassword) {
+      final TextEditingController passController = TextEditingController();
+      final bool passConfirm = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            title: Text(userProvider.t('delete_account')),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(userProvider.t('delete_account_password')),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: passController,
+                  obscureText: true,
+                  decoration: const InputDecoration(border: OutlineInputBorder()),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(userProvider.t('cancel')),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(userProvider.t('btn_confirm')),
+              ),
+            ],
+          );
+        },
+      ) ?? false;
+
+      if (!passConfirm || passController.text.isEmpty) return;
+      credential = EmailAuthProvider.credential(email: user.email!, password: passController.text);
+    } else if (hasGoogle) {
+      credential = await userProvider.getGoogleCredential();
+      if (credential == null) return;
+    }
+
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    
+    try {
+      await userProvider.deleteAccount(credential);
+      if (mounted) {
+        Navigator.pop(context); // close loader
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userProvider.t('delete_success'))));
+        Navigator.pop(context); // back
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // close loader
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userProvider.t('delete_error') + ': $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final userProvider = context.watch<UserProvider>();
@@ -973,6 +1089,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             CustomButton(
               text: userProvider.t('save_changes'),
               onPressed: _save,
+            ),
+            const SizedBox(height: 20),
+            TextButton(
+              onPressed: () => _deleteAccountDialog(userProvider),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.redAccent,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: Text(
+                userProvider.t('delete_account'),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
             ),
           ],
         ),

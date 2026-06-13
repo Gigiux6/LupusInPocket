@@ -394,4 +394,56 @@ class UserProvider with ChangeNotifier {
       rethrow;
     }
   }
+
+  Future<void> deleteAccount(dynamic credential) async {
+    try {
+      final userAuth = _auth.currentUser;
+      if (userAuth == null) throw 'Nessun utente autenticato';
+
+      // 1. Re-authenticate se necessario
+      if (credential != null && !userAuth.isAnonymous) {
+        if (kIsWeb && credential is GoogleAuthProvider) {
+           await userAuth.reauthenticateWithPopup(credential as AuthProvider);
+        } else {
+           await userAuth.reauthenticateWithCredential(credential);
+        }
+      }
+
+      // 2. Elimina da Firestore
+      if (_user != null && _user!.uid != 'local_user') {
+        try {
+          await _firestoreService.deleteUserProfile(_user!.uid);
+        } catch (e) {
+          debugPrint('Errore eliminazione profilo Firestore: $e');
+          // Ignoriamo per procedere con l'eliminazione Auth
+        }
+      }
+
+      // 3. Elimina da Firebase Auth
+      if (!userAuth.isAnonymous) {
+        await userAuth.delete();
+      } else {
+        try {
+          await userAuth.delete();
+        } catch (e) {
+          await _authService.signOut();
+        }
+      }
+
+      // 4. Pulisci stato locale
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_nameKey);
+      await prefs.remove(_avatarKey);
+      _user = null;
+      resetInitializationFlag();
+      await init();
+    } catch (e) {
+      debugPrint('Errore in deleteAccount: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic> getGoogleCredential() async {
+    return await _authService.getGoogleCredential();
+  }
 }

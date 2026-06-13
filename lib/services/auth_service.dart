@@ -123,6 +123,28 @@ class AuthService {
     }
   }
 
+  Future<dynamic> getGoogleCredential() async {
+    try {
+      if (kIsWeb) {
+        final GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        googleProvider.setCustomParameters({'prompt': 'select_account'});
+        return googleProvider;
+      } else {
+        await _ensureGoogleSignInInitialized();
+        final GoogleSignInAccount? googleUser = await GoogleSignIn.instance.authenticate();
+        if (googleUser == null) return null;
+
+        final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+        return GoogleAuthProvider.credential(
+          idToken: googleAuth.idToken,
+        );
+      }
+    } catch (e) {
+      debugPrint('Errore in getGoogleCredential: $e');
+      throw 'Errore durante l\'ottenimento delle credenziali Google: $e';
+    }
+  }
+
   Future<void> signOut() async {
     await _auth.signOut();
     if (!kIsWeb) {
