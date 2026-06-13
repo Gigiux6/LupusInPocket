@@ -178,7 +178,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(50),
-                        child: Image.network(user.avatarUrl),
+                        child: user.avatarUrl.isNotEmpty 
+                            ? Image.network(user.avatarUrl, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.person, size: 60))
+                            : const Icon(Icons.person, size: 60),
                       ),
                     ),
                   ),

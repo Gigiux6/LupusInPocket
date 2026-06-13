@@ -673,8 +673,10 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                   child: Column(
                     children: [
-                      if (p.avatarUrl != null)
-                        CircleAvatar(backgroundImage: NetworkImage(p.avatarUrl!), radius: 20),
+                      if (p.avatarUrl != null && p.avatarUrl!.isNotEmpty)
+                        CircleAvatar(backgroundImage: NetworkImage(p.avatarUrl!), radius: 20)
+                      else
+                        const CircleAvatar(child: Icon(Icons.person, size: 20), radius: 20),
                       const SizedBox(height: 4),
                       p.role == PlayerRole.jolly && isGameOver
                         ? ShaderMask(

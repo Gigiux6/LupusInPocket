@@ -303,7 +303,7 @@ class UserProvider with ChangeNotifier {
   }
 
   String _getDefaultAvatar(String name) {
-    return 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&size=256&background=random';
+    return '';
   }
 
   String t(String key, {Map<String, String>? args}) {

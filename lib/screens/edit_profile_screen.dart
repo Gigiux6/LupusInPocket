@@ -26,26 +26,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _isLinking = false;
   final ProfileStorageService _profileStorageService = ProfileStorageService();
   
-  // Medieval/Adventurer style avatars
-  final List<String> _avatars = [
-    'https://api.dicebear.com/7.x/adventurer/png?seed=Knight',
-    'https://api.dicebear.com/7.x/adventurer/png?seed=Witch',
-    'https://api.dicebear.com/7.x/adventurer/png?seed=Wolf',
-    'https://api.dicebear.com/7.x/adventurer/png?seed=Mage',
-    'https://api.dicebear.com/7.x/adventurer/png?seed=King',
-    'https://api.dicebear.com/7.x/adventurer/png?seed=Villager',
-    'https://api.dicebear.com/7.x/adventurer/png?seed=Ranger',
-    'https://api.dicebear.com/7.x/adventurer/png?seed=Blacksmith',
-    'https://api.dicebear.com/7.x/adventurer/png?seed=Healer',
-  ];
 
-  String _getAvatarName(String url) {
-    final index = _avatars.indexOf(url);
-    if (index != -1) {
-      return 'Avatar ${index + 1}';
-    }
-    return 'Avatar';
-  }
 
   @override
   void initState() {
@@ -343,7 +324,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         final name = (existingName != null && existingName.isNotEmpty && existingName != 'Giocatore')
             ? existingName
             : (user.user!.displayName ?? 'Giocatore');
-        final photo = user.user!.photoURL ?? 'https://api.dicebear.com/7.x/adventurer/png?seed=Knight';
+        final photo = user.user!.photoURL ?? '';
         await prefs.setString('user_name', name);
         await prefs.setString('user_avatar', photo);
         userProvider.resetInitializationFlag();
@@ -641,7 +622,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         final name = (existingName != null && existingName.isNotEmpty && existingName != 'Giocatore')
             ? existingName
             : (user.user!.displayName ?? 'Giocatore');
-        final photo = user.user!.photoURL ?? 'https://api.dicebear.com/7.x/adventurer/png?seed=Knight';
+        final photo = user.user!.photoURL ?? '';
         await prefs.setString('user_name', name);
         await prefs.setString('user_avatar', photo);
         userProvider.resetInitializationFlag();
@@ -987,77 +968,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 30),
-            _buildMedievalCard(
-              color: surface,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(userProvider.t('choose_avatar'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.dayText)),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: _selectedAvatar,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppTheme.goldBorder, width: 2),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppTheme.goldBorder, width: 2),
-                      ),
-                    ),
-                    dropdownColor: Colors.white,
-                    onChanged: (String? newValue) {
-                      if (newValue != null) {
-                        setState(() {
-                          _selectedAvatar = newValue;
-                        });
-                      }
-                    },
-                    items: () {
-                      final itemsList = List<String>.from(_avatars);
-                      if (_selectedAvatar != null && !itemsList.contains(_selectedAvatar)) {
-                        itemsList.insert(0, _selectedAvatar!);
-                      }
-                      return itemsList.map<DropdownMenuItem<String>>((String avatar) {
-                        final isCustom = !_avatars.contains(avatar);
-                        return DropdownMenuItem<String>(
-                          value: avatar,
-                          child: Row(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: CachedNetworkImage(
-                                  imageUrl: avatar,
-                                  width: 32,
-                                  height: 32,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => const SizedBox(
-                                    width: 32,
-                                    height: 32,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  ),
-                                  errorWidget: (context, url, error) => const Icon(Icons.person, size: 32),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                isCustom ? "Foto Personalizzata" : _getAvatarName(avatar),
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList();
-                    }(),
-                  ),
-                ],
-              ),
-            ),
+
             const SizedBox(height: 40),
             CustomButton(
               text: userProvider.t('save_changes'),

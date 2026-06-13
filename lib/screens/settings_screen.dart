@@ -52,8 +52,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       CircleAvatar(
                         radius: 30,
-                        backgroundImage: user?.avatarUrl != null ? NetworkImage(user!.avatarUrl) : null,
-                        child: user?.avatarUrl == null ? const Icon(Icons.person) : null,
+                        backgroundImage: (user?.avatarUrl != null && user!.avatarUrl.isNotEmpty) ? NetworkImage(user.avatarUrl) : null,
+                        child: (user?.avatarUrl == null || user!.avatarUrl.isEmpty) ? const Icon(Icons.person) : null,
                       ),
                       const SizedBox(width: 16),
                       Expanded(

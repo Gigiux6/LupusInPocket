@@ -180,8 +180,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     color: Colors.white,
                     child: ListTile(
                       leading: CircleAvatar(
-                        backgroundImage: player.avatarUrl != null ? NetworkImage(player.avatarUrl!) : null,
-                        child: player.avatarUrl == null ? const Icon(Icons.person) : null,
+                        backgroundImage: (player.avatarUrl != null && player.avatarUrl!.isNotEmpty) ? NetworkImage(player.avatarUrl!) : null,
+                        child: (player.avatarUrl == null || player.avatarUrl!.isEmpty) ? const Icon(Icons.person) : null,
                       ),
                       title: Text(player.name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
                       trailing: player.id == room.hostId ? const Icon(Icons.star, color: Colors.amber) : null,
