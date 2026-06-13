@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Funzione helper per verificare se l'utente è il proprietario del dato
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Assumiamo che ci sia una collezione 'users' in cui ogni documento ha come ID l'uid dell'utente
+    match /users/{userId} {
+      // Un utente può leggere, scrivere e modificare solo il proprio documento
+      allow read, write: if isOwner(userId);
+      
+      // Sotto-collezioni private dell'utente
+      match /{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+    
+    // Fallback: blocca tutti gli altri accessi non esplicitamente consentiti
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

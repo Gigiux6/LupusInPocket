@@ -1,0 +1,29 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Funzione helper per verificare se l'utente è autenticato e corrisponde all'ID
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Verifica che il file sia un'immagine e che pesi meno di 5 MB
+    // Previene "Denial of Wallet" e iniezioni di script mascherati da file
+    function isValidImage() {
+      return request.resource.contentType.matches('image/.*')
+          && request.resource.size < 5 * 1024 * 1024; // Max 5 MB
+    }
+
+    // Limita l'accesso alla cartella delle foto profilo per ogni utente
+    match /profile_pictures/{userId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if isOwner(userId) && isValidImage();
+    }
+
+    // Regola generica in fondo: se un path non è coperto dalle regole precedenti,
+    // viene negato l'accesso per default.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

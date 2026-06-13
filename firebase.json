@@ -1,1 +1,42 @@
-{"hosting":{"public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**"],"rewrites":[{"source":"**","destination":"/index.html"}]},"flutter":{"platforms":{"android":{"default":{"projectId":"lupus-in-pocket","appId":"1:248731957793:android:b6ef4d39af1683a053c160","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"lupus-in-pocket","configurations":{"android":"1:248731957793:android:b6ef4d39af1683a053c160","web":"1:248731957793:web:6b8fb3a955adc63c53c160"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "lupus-in-pocket",
+          "appId": "1:248731957793:android:b6ef4d39af1683a053c160",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "lupus-in-pocket",
+          "configurations": {
+            "android": "1:248731957793:android:b6ef4d39af1683a053c160",
+            "web": "1:248731957793:web:6b8fb3a955adc63c53c160"
+          }
+        }
+      }
+    }
+  }
+}

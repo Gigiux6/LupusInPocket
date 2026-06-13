@@ -41,6 +41,9 @@ class AuthService {
     try {
       if (kIsWeb) {
         final GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        googleProvider.setCustomParameters({
+          'prompt': 'select_account'
+        });
         final UserCredential userCredential = await user.linkWithPopup(googleProvider);
         return userCredential.user;
       } else {
@@ -60,13 +63,7 @@ class AuthService {
       }
     } on FirebaseAuthException catch (e, stackTrace) {
       debugPrint('FirebaseAuthException in linkWithGoogle: ${e.code} - ${e.message}\n$stackTrace');
-      if (e.code == 'credential-already-in-use') {
-        throw 'Questo account Google è già associato a un altro utente. Impossibile collegarlo.';
-      } else if (e.code == 'provider-already-linked') {
-        throw 'Questo profilo è già collegato ad un account Google.';
-      } else {
-        throw 'Errore durante il collegamento Google: ${e.message}';
-      }
+      rethrow;
     } catch (e, stackTrace) {
       debugPrint('Errore generico in linkWithGoogle: $e\n$stackTrace');
       throw 'Errore generico durante il collegamento Google: $e';
@@ -100,6 +97,9 @@ class AuthService {
     try {
       if (kIsWeb) {
         final GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        googleProvider.setCustomParameters({
+          'prompt': 'select_account'
+        });
         final UserCredential userCredential = await _auth.signInWithPopup(googleProvider);
         return userCredential.user;
       } else {
@@ -127,7 +127,16 @@ class AuthService {
     await _auth.signOut();
     if (!kIsWeb) {
       await _ensureGoogleSignInInitialized();
-      await GoogleSignIn.instance.signOut();
+      try {
+        await GoogleSignIn.instance.disconnect();
+      } catch (e) {
+        debugPrint('Errore durante GoogleSignIn disconnect: $e. Fallback a signOut semplice.');
+        try {
+          await GoogleSignIn.instance.signOut();
+        } catch (signOutError) {
+          debugPrint('Errore anche durante GoogleSignIn signOut: $signOutError');
+        }
+      }
     }
   }
 }

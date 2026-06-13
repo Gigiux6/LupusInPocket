@@ -4,21 +4,25 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
-import 'package:provider/provider.dart';
-import '../providers/user_provider.dart';
 
 class ProfileStorageService {
-  final FirebaseStorage _storage = FirebaseStorage.instance;
-  final ImagePicker _picker = ImagePicker();
-  final ImageCropper _cropper = ImageCropper();
+  final FirebaseStorage _storage;
+  final ImagePicker _picker;
+  final ImageCropper _cropper;
+
+  // 1. Dependency Injection
+  ProfileStorageService({
+    FirebaseStorage? storage,
+    ImagePicker? picker,
+    ImageCropper? cropper,
+  })  : _storage = storage ?? FirebaseStorage.instance,
+        _picker = picker ?? ImagePicker(),
+        _cropper = cropper ?? ImageCropper();
 
   /// Consente all'utente di selezionare un'immagine dalla galleria del telefono.
   Future<XFile?> pickImageFromGallery() async {
     try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
-      );
-      return image;
+      return await _picker.pickImage(source: ImageSource.gallery);
     } catch (e) {
       debugPrint('Errore durante la selezione dell\'immagine: $e');
       rethrow;
@@ -26,16 +30,17 @@ class ProfileStorageService {
   }
 
   /// Consente all'utente di ritagliare l'immagine in formato 1:1 con un'anteprima circolare.
-  Future<CroppedFile?> cropImage(XFile imageFile, BuildContext context) async {
+  Future<CroppedFile?> cropImage({
+    required XFile imageFile,
+    required BuildContext context,
+    String title = 'Ritaglia',
+    String cropText = 'Conferma',
+    String cancelText = 'Annulla',
+    String rotateLeftText = 'Ruota a Sinistra',
+    String rotateRightText = 'Ruota a Destra',
+  }) async {
     try {
-      final userProvider = Provider.of<UserProvider>(context, listen: false);
-      final String title = userProvider.t('crop_title');
-      final String cropText = userProvider.t('crop');
-      final String cancelText = userProvider.t('cancel');
-      final String rotateLeftText = userProvider.t('rotate_left');
-      final String rotateRightText = userProvider.t('rotate_right');
-
-      final croppedFile = await _cropper.cropImage(
+      return await _cropper.cropImage(
         sourcePath: imageFile.path,
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
         uiSettings: [
@@ -58,7 +63,7 @@ class ProfileStorageService {
           WebUiSettings(
             context: context,
             presentStyle: WebPresentStyle.dialog,
-            size: const CropperSize(width: 300, height: 300),
+            size: const CropperSize(width: 400, height: 400),
             translations: WebTranslations(
               title: title,
               rotateLeftTooltip: rotateLeftText,
@@ -69,7 +74,6 @@ class ProfileStorageService {
           ),
         ],
       );
-      return croppedFile;
     } catch (e) {
       debugPrint('Errore durante il ritaglio: $e');
       return null;
@@ -77,58 +81,72 @@ class ProfileStorageService {
   }
 
   /// Ottimizza, ridimensiona e carica l'immagine profilo dell'utente su Firebase Storage.
-  /// 
-  /// - Risoluzione finale: esattamente 500x500 pixel.
-  /// - Formato: JPEG con qualità impostata a 70.
-  /// - Percorso di upload: `profiles/${userId}.jpg`.
-  /// 
-  /// Ritorna l'URL pubblico del file caricato.
   Future<String> uploadProfileImage(CroppedFile imageFile, String userId) async {
-    try {
-      debugPrint('DEBUG ProfileStorage: Inizio lettura bytes...');
-      final Uint8List bytes = await imageFile.readAsBytes();
-      debugPrint('DEBUG ProfileStorage: Bytes letti: ${bytes.length}');
+    return _compressAndUpload(
+      bytes: await imageFile.readAsBytes(),
+      path: 'profiles/$userId.jpg',
+      minWidth: 500,
+      minHeight: 500,
+      quality: 70,
+    );
+  }
 
-      // 1. Ottimizzazione e compressione a 500x500 pixel
+  /// Carica un'immagine personalizzata (es. per modalità di gioco custom) mantenendo alta qualità e proporzioni.
+  Future<String> uploadCustomImage(XFile file, String identifier) async {
+    return _compressAndUpload(
+      bytes: await file.readAsBytes(),
+      path: identifier,
+      minWidth: 1080,
+      minHeight: 1080,
+      quality: 85,
+    );
+  }
+
+  /// Metodo privato centralizzato per la compressione e l'upload (Principio DRY)
+  Future<String> _compressAndUpload({
+    required Uint8List bytes,
+    required String path,
+    required int minWidth,
+    required int minHeight,
+    required int quality,
+  }) async {
+    try {
       Uint8List compressedData;
       try {
-        debugPrint('DEBUG ProfileStorage: Inizio compressione a 500x500...');
-        final result = await FlutterImageCompress.compressWithList(
+        compressedData = await FlutterImageCompress.compressWithList(
           bytes,
-          minWidth: 500,
-          minHeight: 500,
-          quality: 70,
+          minWidth: minWidth,
+          minHeight: minHeight,
+          quality: quality,
           format: CompressFormat.jpeg,
         );
-        compressedData = result;
-        debugPrint('DEBUG ProfileStorage: Compressione completata. Dimensione: ${compressedData.length} bytes');
       } catch (compressError) {
-        // Se la compressione fallisce (es. su Web o errore nativo), usiamo i byte originali come fallback
-        debugPrint('DEBUG ProfileStorage: Compressione fallita ($compressError). Uso i bytes originali.');
+        debugPrint('Fallback ai byte originali causa errore compressione: $compressError');
         compressedData = bytes;
       }
 
-      // 2. Definizione del percorso e metadati (profiles/${userId}.jpg)
-      final String path = 'profiles/$userId.jpg';
-      debugPrint('DEBUG ProfileStorage: Inizio upload su path: $path');
       final Reference ref = _storage.ref().child(path);
-      
       final UploadTask uploadTask = ref.putData(
         compressedData,
         SettableMetadata(contentType: 'image/jpeg'),
       );
 
       final TaskSnapshot snapshot = await uploadTask;
-      debugPrint('DEBUG ProfileStorage: Caricamento completato con successo.');
-
-      // 3. Recupero dell'URL pubblico
-      final String downloadUrl = await snapshot.ref.getDownloadURL();
-      debugPrint('DEBUG ProfileStorage: URL pubblico ottenuto: $downloadUrl');
-
-      return downloadUrl;
+      return await snapshot.ref.getDownloadURL();
     } catch (e) {
-      debugPrint('Errore durante l\'ottimizzazione/caricamento dell\'immagine: $e');
+      debugPrint('Errore fatale in upload su $path: $e');
       rethrow;
+    }
+  }
+
+  /// Elimina tutte le immagini personalizzate associate a una determinata stanza.
+  Future<void> deleteCustomRoomImages(String roomId) async {
+    try {
+      final ListResult result = await _storage.ref('custom_identities/$roomId').listAll();
+      await Future.wait(result.items.map((ref) => ref.delete())); // Esecuzione parallela
+      debugPrint('Eliminate tutte le immagini personalizzate per la stanza $roomId');
+    } catch (e) {
+      debugPrint('Errore durante l\'eliminazione delle immagini personalizzate: $e');
     }
   }
 }

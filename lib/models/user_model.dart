@@ -1,11 +1,13 @@
-class UserModel {
+import 'package:equatable/equatable.dart';
+
+class UserModel extends Equatable {
   final String uid;
   final String name;
   final String avatarUrl;
   final int gamesWon;
   final String email;
 
-  UserModel({
+  const UserModel({
     required this.uid,
     required this.name,
     required this.avatarUrl,
@@ -16,10 +18,10 @@ class UserModel {
   factory UserModel.fromMap(String uid, Map<dynamic, dynamic> map) {
     return UserModel(
       uid: uid,
-      name: map['username'] ?? map['name'] ?? '',
-      avatarUrl: map['photoUrl'] ?? map['avatarUrl'] ?? '',
-      gamesWon: map['gamesWon'] ?? 0,
-      email: map['email'] ?? '',
+      name: (map['username'] ?? map['name'] ?? '').toString(),
+      avatarUrl: (map['photoUrl'] ?? map['avatarUrl'] ?? '').toString(),
+      gamesWon: _parseInt(map['gamesWon']),
+      email: (map['email'] ?? '').toString(),
     );
   }
 
@@ -47,4 +49,13 @@ class UserModel {
       email: email ?? this.email,
     );
   }
+
+  static int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  @override
+  List<Object?> get props => [uid, name, avatarUrl, gamesWon, email];
 }

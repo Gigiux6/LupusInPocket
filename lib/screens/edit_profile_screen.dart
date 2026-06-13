@@ -39,6 +39,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     'https://api.dicebear.com/7.x/adventurer/png?seed=Healer',
   ];
 
+  String _getAvatarName(String url) {
+    final index = _avatars.indexOf(url);
+    if (index != -1) {
+      return 'Avatar ${index + 1}';
+    }
+    return 'Avatar';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -76,7 +84,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (image == null) return;
 
       if (!mounted) return;
-      final CroppedFile? croppedFile = await _profileStorageService.cropImage(image, context);
+      final CroppedFile? croppedFile = await _profileStorageService.cropImage(
+        imageFile: image,
+        context: context,
+        title: userProvider.t('crop_title'),
+        cropText: userProvider.t('crop'),
+        cancelText: userProvider.t('cancel'),
+        rotateLeftText: userProvider.t('rotate_left'),
+        rotateRightText: userProvider.t('rotate_right'),
+      );
       if (croppedFile == null) return;
 
       setState(() {
@@ -178,6 +194,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _isLinking = false;
         });
         
+        AuthCredential? conflictingCredential;
+        if (e is FirebaseAuthException) {
+          conflictingCredential = e.credential;
+        }
+        
         final String errorMessage = e.toString();
         if (errorMessage.contains('popup-closed-by-user') ||
             errorMessage.contains('canceled') ||
@@ -190,7 +211,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             errorMessage.contains('already-in-use') ||
             errorMessage.contains('already in use') ||
             errorMessage.contains('credential-already-in-use') ||
-            errorMessage.contains('email-already-in-use')) {
+            errorMessage.contains('email-already-in-use') ||
+            (e is FirebaseAuthException && (e.code == 'credential-already-in-use' || e.code == 'email-already-in-use'))) {
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
@@ -206,7 +228,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 TextButton(
                   onPressed: () {
                     Navigator.pop(context);
-                    _signInGoogleAccount();
+                    if (conflictingCredential != null) {
+                      _signInWithCredential(conflictingCredential);
+                    } else {
+                      _signInGoogleAccount();
+                    }
                   },
                   child: Text(userProvider.t('sign_in'), style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
@@ -968,50 +994,66 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(userProvider.t('choose_avatar'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.dayText)),
-                  const SizedBox(height: 16),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 15,
-                      mainAxisSpacing: 15,
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: _selectedAvatar,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: AppTheme.goldBorder, width: 2),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: AppTheme.goldBorder, width: 2),
+                      ),
                     ),
-                    itemCount: _avatars.length,
-                    itemBuilder: (context, index) {
-                      final avatar = _avatars[index];
-                      final isSelected = _selectedAvatar == avatar;
-                      return GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          setState(() {
-                            _selectedAvatar = avatar;
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppTheme.goldBorder.withOpacity(0.3) : Colors.white.withOpacity(0.5),
-                            border: Border.all(
-                              color: isSelected ? AppTheme.goldBorder : Colors.transparent,
-                              width: 3,
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Center(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: CachedNetworkImage(
-                                imageUrl: avatar,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => const CircularProgressIndicator(),
-                                errorWidget: (context, url, error) => const Icon(Icons.person),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
+                    dropdownColor: Colors.white,
+                    onChanged: (String? newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          _selectedAvatar = newValue;
+                        });
+                      }
                     },
+                    items: () {
+                      final itemsList = List<String>.from(_avatars);
+                      if (_selectedAvatar != null && !itemsList.contains(_selectedAvatar)) {
+                        itemsList.insert(0, _selectedAvatar!);
+                      }
+                      return itemsList.map<DropdownMenuItem<String>>((String avatar) {
+                        final isCustom = !_avatars.contains(avatar);
+                        return DropdownMenuItem<String>(
+                          value: avatar,
+                          child: Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: CachedNetworkImage(
+                                  imageUrl: avatar,
+                                  width: 32,
+                                  height: 32,
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => const SizedBox(
+                                    width: 32,
+                                    height: 32,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                  errorWidget: (context, url, error) => const Icon(Icons.person, size: 32),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                isCustom ? "Foto Personalizzata" : _getAvatarName(avatar),
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList();
+                    }(),
                   ),
                 ],
               ),
