@@ -14,7 +14,7 @@
 * **🌐 Web Version**: Play directly in your browser at [lupus-pocket-web.app](https://lupus-in-pocket.web.app)
 * **📱 Android APK**: Download the latest stable APK from the [Releases page](https://github.com/Gigiux6/LupusInFabula/releases).
 
-Lupus in Pocket is a vibrant, immersive multiplayer party game inspired by the classic "Lupus in Pocket" tabletop game. Players assume secret roles, vote, and navigate narrative phases in real time.
+Lupus in Pocket is a vibrant, immersive multiplayer party game inspired by the classic "Lupus in Fabula" tabletop game. Players assume secret roles, vote, and navigate narrative phases in real time.
 
 ## 🚀 Main Features
 
@@ -35,29 +35,6 @@ Lupus in Pocket is a vibrant, immersive multiplayer party game inspired by the c
 * **State Management**: Provider
 * **Audio**: Audioplayers for immersive sound effects
 * **Graphics**: Modern design system with responsive layouts
-
-## 📱 Getting Started
-
-### Prerequisites
-* Flutter SDK (latest)
-* Firebase project with Realtime Database/Firestore enabled
-
-### Installation
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/Gigiux6/LupusInFabula.git
-   ```
-2. **Install dependencies**:
-   ```bash
-   flutter pub get
-   ```
-3. **Configure Firebase**:
-   - Add `google-services.json` (Android) and `GoogleService-Info.plist` (iOS) to the appropriate folders.
-   - For Web, initialize Firebase in `index.html` or via `firebase_options.dart`.
-4. **Run the app**:
-   ```bash
-   flutter run
-   ```
 
 ## 🌍 Localization
 The app automatically detects system language or allows manual selection in settings.
