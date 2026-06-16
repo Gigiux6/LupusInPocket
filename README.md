@@ -25,7 +25,7 @@ Lupus in Pocket is a vibrant, immersive multiplayer party game inspired by the c
   * **Custom Mode** – Create your own secret identities.
 * **Smart Sync** – Seamless state synchronization using Firebase.
 * **Multilingual Support** – Italian, English, Spanish, German, French.
-* **Rich Aesthetics** – Dark mode, glassmorphism UI, smooth micro‑animations.
+* **Rich Aesthetics** – Dynamic Day/Night themes, immersive tavern-style UI, smooth micro‑animations.
 * **In‑game Notes** – Track clues and answers.
 
 ## 🛠️ Technology Stack
