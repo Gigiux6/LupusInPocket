@@ -5,7 +5,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Web-green?style=for-the-badge&logo=googlechrome)
 
 <p align="center">
-  <img src="./assets/images/lupus_cover_image.png" width="800" alt="Lupus In Pocket Cover" />
+  <img src="./assets/images/lupus_cover_tavern.png" width="800" alt="Lupus In Pocket Cover" />
 </p>
 
 <p align="center">
